@@ -49,6 +49,7 @@ interface SidePanelProps {
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onSelectWeek: (idx: number) => void;
+  onJumpToday: () => void;
   onCoverChange: (cover: BinderCoverTheme) => void;
   onToggleFont: () => void;
   onViewChange: (mode: ViewMode) => void;
@@ -79,6 +80,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onPrevWeek,
   onNextWeek,
   onSelectWeek,
+  onJumpToday,
   onCoverChange,
   onToggleFont,
   onViewChange,
@@ -203,8 +205,18 @@ export const SidePanel: React.FC<SidePanelProps> = ({
 
           {/* Week Jumper */}
           <div>
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
-              Jump to Week
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                Jump to Week
+              </span>
+              <button
+                type="button"
+                onClick={onJumpToday}
+                className="px-2 py-0.5 rounded-md border border-blue-200 bg-blue-50 text-blue-800 text-[10.5px] font-bold hover:bg-blue-100 cursor-pointer"
+                title="Go to this week (shortcut: T)"
+              >
+                Today
+              </button>
             </div>
             <div className="flex items-center gap-1">
               <button

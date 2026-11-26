@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { usePlannerStore } from './store/usePlannerStore';
-import { resolveSchedule } from './engine/cycleEngine';
+import { locateToday, resolveSchedule } from './engine/cycleEngine';
+import { todayISO } from './engine/dateUtils';
 import { SidePanel } from './components/SidePanel';
 import { BinderSpread } from './components/BinderSpread';
 import { FlatGridView } from './components/FlatGridView';
@@ -144,6 +145,12 @@ export default function App() {
     [safeWeekIdx, schedule.weeks.length, setWeekIndex, activeEdit, finishEditingCell],
   );
 
+  const goToToday = useCallback(() => {
+    const pos = locateToday(schedule, todayISO());
+    goToWeek(pos.weekIndex);
+    setPhoneDayIndex(pos.dayIndex);
+  }, [schedule, goToWeek, setPhoneDayIndex]);
+
   // Close inline editor & auto-save immediately when clicking outside
   useEffect(() => {
     if (!activeEdit) return;
@@ -198,11 +205,12 @@ export default function App() {
       if (!inField && !shelfOpen && !wizardOpen && !exportOpen && !activeEdit) {
         if (e.key === 'ArrowLeft') goToWeek(safeWeekIdx - 1);
         if (e.key === 'ArrowRight') goToWeek(safeWeekIdx + 1);
+        if (e.key.toLowerCase() === 't' && !e.metaKey && !e.ctrlKey && !e.altKey) goToToday();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [goToWeek, safeWeekIdx, undo, redo, shelfOpen, wizardOpen, exportOpen, activeEdit]);
+  }, [goToWeek, goToToday, safeWeekIdx, undo, redo, shelfOpen, wizardOpen, exportOpen, activeEdit]);
 
   // Debounced auto-save to private Google Drive JSON while typing (1.5s after edits when signed in)
   useEffect(() => {
@@ -302,6 +310,7 @@ export default function App() {
         onPrevWeek={() => goToWeek(safeWeekIdx - 1)}
         onNextWeek={() => goToWeek(safeWeekIdx + 1)}
         onSelectWeek={goToWeek}
+        onJumpToday={goToToday}
         onCoverChange={setCoverTheme}
         onToggleFont={() =>
           setNoteFont(workspace.uiPreferences.noteFont === 'handwritten' ? 'sans' : 'handwritten')

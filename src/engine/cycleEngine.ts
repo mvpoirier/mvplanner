@@ -296,3 +296,32 @@ export function resolveSlot(
     banners,
   };
 }
+
+export interface TodayPosition {
+  weekIndex: number;
+  dayIndex: number; // 0 = Monday … 4 = Friday
+}
+
+/**
+ * Where should the planner open for a given date?
+ *  • a school day or holiday inside the binder → that week & weekday
+ *  • a weekend → the coming week (Monday), since weekends are for planning ahead
+ *  • before the binder starts → the first teaching week
+ *  • after the binder ends → the final week
+ */
+export function locateToday(schedule: ResolvedSchedule, todayIso: string): TodayPosition {
+  const { weeks } = schedule;
+  if (weeks.length === 0) return { weekIndex: 0, dayIndex: 0 };
+  const firstTeaching = Math.max(0, weeks.findIndex((w) => w.isTeachingWeek));
+  if (todayIso < weeks[0].mondayIso) return { weekIndex: firstTeaching, dayIndex: 0 };
+  const last = weeks.length - 1;
+  if (todayIso > weeks[last].fridayIso) return { weekIndex: last, dayIndex: 4 };
+
+  for (let i = 0; i < weeks.length; i++) {
+    const w = weeks[i];
+    const dayIndex = w.days.findIndex((d) => d.iso === todayIso);
+    if (dayIndex !== -1) return { weekIndex: i, dayIndex };
+    if (todayIso < w.mondayIso) return { weekIndex: i, dayIndex: 0 }; // weekend before this week
+  }
+  return { weekIndex: last, dayIndex: 4 };
+}

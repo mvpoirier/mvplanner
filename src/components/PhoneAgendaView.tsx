@@ -4,6 +4,7 @@ import React from 'react';
 import { cellKey, type AcademicYearBinder } from '../types/planner';
 import { formatWeekHeading, resolveSlot, type ResolvedWeek } from '../engine/cycleEngine';
 import type { SelectedCell } from '../store/usePlannerStore';
+import { todayISO } from '../engine/dateUtils';
 
 interface PhoneAgendaViewProps {
   binder: AcademicYearBinder;
@@ -46,7 +47,17 @@ export const PhoneAgendaView: React.FC<PhoneAgendaViewProps> = ({
                     : 'bg-white/15 text-white hover:bg-white/25'
                 }`}
               >
-                <div>{d.dow}</div>
+                <div>
+                  {d.dow}
+                  {d.iso === todayISO() && (
+                    <span
+                      className={`inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle ${
+                        di === safeIdx ? 'bg-[#1b4487]' : 'bg-white'
+                      }`}
+                      aria-label="Today"
+                    />
+                  )}
+                </div>
                 <div className="text-[9.5px] opacity-85">{d.cycleLetter ?? '★'}</div>
               </button>
             ))}
