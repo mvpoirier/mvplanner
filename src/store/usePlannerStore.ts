@@ -17,7 +17,8 @@ import {
 } from '../types/planner';
 import { createInitialWorkspace } from '../presets/demoBinder';
 import { smartBumpForward, type BumpScope } from '../engine/smartBumpEngine';
-import { resolveSchedule } from '../engine/cycleEngine';
+import { locateToday, resolveSchedule } from '../engine/cycleEngine';
+import { todayISO } from '../engine/dateUtils';
 import {
   decryptJSON,
   encryptJSON,
@@ -136,16 +137,13 @@ function schedulePersist(
   }, 250);
 }
 
-function defaultWeekIndexForBinder(binder: AcademicYearBinder): number {
-  const sched = resolveSchedule(binder);
-  // If demo binder, open on Week 9 (Oct 19-23) to match the rich mockup showcase; otherwise open on current week or Week 1
-  if (binder.id === 'demo-2026-2027') {
-    const wk9 = sched.weeks.findIndex((w) => w.mondayIso === '2026-10-19');
-    if (wk9 !== -1) return wk9;
-  }
-  const firstTeaching = sched.weeks.findIndex((w) => w.isTeachingWeek);
-  return firstTeaching >= 0 ? firstTeaching : 0;
+/** Open on the week (and phone-view weekday) containing today. */
+function todayNav(binder: AcademicYearBinder): { weekIndex: number; phoneDayIndex: number } {
+  const pos = locateToday(resolveSchedule(binder), todayISO());
+  return { weekIndex: pos.weekIndex, phoneDayIndex: pos.dayIndex };
 }
+
+const NAV_ZERO = { weekIndex: 0, phoneDayIndex: 0 };
 
 const initialWorkspace = createInitialWorkspace();
 
@@ -156,8 +154,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   lockedEnvelope: null,
   lockPassphrase: null,
 
-  weekIndex: defaultWeekIndexForBinder(initialWorkspace.binders[initialWorkspace.activeBinderId]),
-  phoneDayIndex: 0,
+  ...todayNav(initialWorkspace.binders[initialWorkspace.activeBinderId]),
   viewMode: 'binder',
   selectedCell: null,
   toastMessage: null,
@@ -200,7 +197,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
         set({
           workspace: ws,
           hydrated: true,
-          weekIndex: defaultWeekIndexForBinder(active),
+          ...todayNav(active),
         });
       } else {
         set({ hydrated: true });
@@ -222,7 +219,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
         locked: false,
         lockedEnvelope: null,
         lockPassphrase: passphrase,
-        weekIndex: active ? defaultWeekIndexForBinder(active) : 0,
+        ...(active ? todayNav(active) : NAV_ZERO),
       });
       return true;
     } catch {
@@ -480,7 +477,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     };
     set({
       workspace: nextWs,
-      weekIndex: defaultWeekIndexForBinder(target),
+      ...todayNav(target),
       selectedCell: null,
       dirtyRevision: state.dirtyRevision + 1,
     });
@@ -499,7 +496,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       workspace: nextWs,
       past: [...state.past.slice(-(MAX_HISTORY - 1)), state.workspace.binders],
       future: [],
-      weekIndex: activate ? defaultWeekIndexForBinder(binder) : state.weekIndex,
+      ...(activate ? todayNav(binder) : {}),
       selectedCell: null,
       dirtyRevision: state.dirtyRevision + 1,
     });
@@ -575,7 +572,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       workspace: nextWs,
       past: [...state.past.slice(-(MAX_HISTORY - 1)), state.workspace.binders],
       future: [],
-      weekIndex: defaultWeekIndexForBinder(nextBinders[nextActiveId]),
+      ...todayNav(nextBinders[nextActiveId]),
       selectedCell: null,
       dirtyRevision: state.dirtyRevision + 1,
     });
@@ -609,9 +606,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   replaceWorkspace: (next) => {
     const state = get();
     const active = next.binders[next.activeBinderId] ?? Object.values(next.binders)[0];
+    // Same binder reloaded (e.g. newer copy from a sync) → stay on the page being viewed.
+    const sameBinder = !!active && active.id === state.workspace.activeBinderId;
     set({
       workspace: next,
-      weekIndex: active ? defaultWeekIndexForBinder(active) : 0,
+      ...(sameBinder ? {} : active ? todayNav(active) : NAV_ZERO),
       selectedCell: null,
       past: [],
       future: [],

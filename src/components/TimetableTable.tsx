@@ -10,6 +10,7 @@ import {
   type PeriodRow,
 } from '../types/planner';
 import { resolveSlot, type ResolvedWeek } from '../engine/cycleEngine';
+import { todayISO } from '../engine/dateUtils';
 import { usePlannerStore, type SelectedCell } from '../store/usePlannerStore';
 
 function getRowWeight(period: PeriodRow): number {
@@ -56,6 +57,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
     }
   }, [editingCell?.date, editingCell?.periodId]);
 
+  const today = todayISO();
   const dayPct = Math.floor(81 / dayIndices.length);
   const totalWeight = binder.periods.reduce((acc, p) => acc + getRowWeight(p), 0) || 1;
   // Reserve ~11.5% for the 3 header rows; distribute remaining ~88.5% proportionally across periods
@@ -78,7 +80,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
           {dayIndices.map((di) => {
             const d = week.days[di];
             return (
-              <th key={d.iso} className="tt-hdr-top">
+              <th key={d.iso} className={`tt-hdr-top${d.iso === today ? ' is-today' : ''}`}>
                 {d.dow}
                 {d.classification.bellLabel && (
                   <span
@@ -98,7 +100,10 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
             DATE
           </th>
           {dayIndices.map((di) => (
-            <th key={week.days[di].iso} className="tt-hdr-date">
+            <th
+              key={week.days[di].iso}
+              className={`tt-hdr-date${week.days[di].iso === today ? ' is-today' : ''}`}
+            >
               {week.days[di].shortDate}
             </th>
           ))}
@@ -111,7 +116,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
           {dayIndices.map((di) => {
             const d = week.days[di];
             return (
-              <th key={d.iso} className="tt-hdr-day">
+              <th key={d.iso} className={`tt-hdr-day${d.iso === today ? ' is-today' : ''}`}>
                 {d.cycleLetter ? (
                   <>
                     {d.cycleLetter}{' '}

@@ -429,6 +429,24 @@ body {
   padding: 0 3px !important;
 }
 
+/* Today's column: soft blue wash + underline on the header cells (screen only) */
+.tt-hdr-top.is-today,
+.tt-hdr-date.is-today,
+.tt-hdr-day.is-today {
+  background-image: linear-gradient(rgba(59, 130, 246, 0.22), rgba(59, 130, 246, 0.22));
+  color: #1e3a8a;
+}
+.tt-hdr-day.is-today {
+  box-shadow: inset 0 -2px 0 #2563eb;
+}
+@media print {
+  .is-today {
+    background-image: none !important;
+    box-shadow: none !important;
+    color: inherit !important;
+  }
+}
+
 .tt-time-col {
   background: #eceef0;
   text-align: center;
