@@ -29,10 +29,13 @@ export default function App() {
   const toastMessage = usePlannerStore((s) => s.toastMessage);
   const syncStatus = usePlannerStore((s) => s.syncStatus);
   const dirtyRevision = usePlannerStore((s) => s.dirtyRevision);
+  const localSaveStatus = usePlannerStore((s) => s.localSaveStatus);
+  const lastLocalSavedAt = usePlannerStore((s) => s.lastLocalSavedAt);
   const canUndo = usePlannerStore((s) => s.past.length > 0);
   const canRedo = usePlannerStore((s) => s.future.length > 0);
 
   const hydrate = usePlannerStore((s) => s.hydrate);
+  const flushPersist = usePlannerStore((s) => s.flushPersist);
   const unlockWithPassphrase = usePlannerStore((s) => s.unlockWithPassphrase);
   const setWeekIndex = usePlannerStore((s) => s.setWeekIndex);
   const setPhoneDayIndex = usePlannerStore((s) => s.setPhoneDayIndex);
@@ -82,30 +85,104 @@ export default function App() {
   const safeWeekIdx = Math.min(Math.max(0, weekIndex), Math.max(0, schedule.weeks.length - 1));
   const currentWeek = schedule.weeks[safeWeekIdx];
 
+  const [showSaveBadge, setShowSaveBadge] = useState(false);
+
+  const syncDriveNow = useCallback(async () => {
+    const state = usePlannerStore.getState();
+    if (!googleSession || state.dirtyRevision === 0 || state.dirtyRevision === lastSyncedRev.current) {
+      return;
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setSyncStatus('offline');
+      return;
+    }
+    setSyncStatus('syncing');
+    try {
+      const res = await saveWorkspaceToDrive(googleSession.accessToken, state.workspace, {
+        fileId: state.workspace.googleSync?.driveFileId,
+        expectedRemoteModifiedTime: state.workspace.googleSync?.remoteModifiedTime,
+      });
+      if (res.status === 'conflict' && res.remoteWorkspace) {
+        setConflictRemote({
+          workspace: res.remoteWorkspace,
+          modifiedTime: res.modifiedTime,
+          fileId: res.fileId,
+        });
+        setSyncStatus('conflict', 'Remote Drive file changed on another device.');
+        showToast('Google Drive sync conflict — open Google Sync to resolve.');
+      } else {
+        lastSyncedRev.current = state.dirtyRevision;
+        updateGoogleSync({
+          driveFileId: res.fileId,
+          remoteModifiedTime: res.modifiedTime,
+          lastSyncedAt: new Date().toISOString(),
+        });
+        setSyncStatus('saved');
+      }
+    } catch (err) {
+      setSyncStatus('error', err instanceof Error ? err.message : 'Auto-sync failed.');
+    }
+  }, [googleSession, setSyncStatus, updateGoogleSync, showToast]);
+
+  const finishEditingCell = useCallback(() => {
+    setActiveEdit(null);
+    void flushPersist();
+    if (googleSession) {
+      void syncDriveNow();
+    }
+  }, [flushPersist, googleSession, syncDriveNow]);
+
   const goToWeek = useCallback(
     (targetIdx: number) => {
       const clamped = Math.min(Math.max(0, targetIdx), schedule.weeks.length - 1);
       if (clamped === safeWeekIdx) return;
-      setActiveEdit(null);
+      if (activeEdit) finishEditingCell();
       setFlipDir(clamped > safeWeekIdx ? 'next' : 'prev');
       setFlipKey((k) => k + 1);
       setWeekIndex(clamped);
     },
-    [safeWeekIdx, schedule.weeks.length, setWeekIndex],
+    [safeWeekIdx, schedule.weeks.length, setWeekIndex, activeEdit, finishEditingCell],
   );
 
-  // Close inline editor when clicking outside the edited cell or floating mini-toolbar
+  // Close inline editor & auto-save immediately when clicking outside
   useEffect(() => {
     if (!activeEdit) return;
     const onDocClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement | null;
       if (!el) return;
       if (el.closest('.tt-slot.editing') || el.closest('.floating-toolbar')) return;
-      setActiveEdit(null);
+      finishEditingCell();
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, [activeEdit]);
+  }, [activeEdit, finishEditingCell]);
+
+  // Flush pending local save if tab is hidden or closed
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void flushPersist();
+    };
+    const onPageHide = () => {
+      void flushPersist();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [flushPersist]);
+
+  // Show subtle bottom-left save badge briefly after each save
+  useEffect(() => {
+    if (localSaveStatus === 'idle' && syncStatus === 'idle') return;
+    setShowSaveBadge(true);
+    if (localSaveStatus === 'saving' || syncStatus === 'syncing' || syncStatus === 'conflict' || syncStatus === 'error') {
+      return;
+    }
+    const t = setTimeout(() => setShowSaveBadge(false), 2600);
+    return () => clearTimeout(t);
+  }, [localSaveStatus, lastLocalSavedAt, syncStatus]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -127,45 +204,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [goToWeek, safeWeekIdx, undo, redo, shelfOpen, wizardOpen, exportOpen, activeEdit]);
 
-  // Debounced auto-save to private Google Drive JSON (2s after edits when signed in)
+  // Debounced auto-save to private Google Drive JSON while typing (1.5s after edits when signed in)
   useEffect(() => {
     if (!googleSession || dirtyRevision === 0 || dirtyRevision === lastSyncedRev.current) return;
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setSyncStatus('offline');
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setSyncStatus('syncing');
-      try {
-        const res = await saveWorkspaceToDrive(googleSession.accessToken, workspace, {
-          fileId: workspace.googleSync?.driveFileId,
-          expectedRemoteModifiedTime: workspace.googleSync?.remoteModifiedTime,
-        });
-        if (res.status === 'conflict' && res.remoteWorkspace) {
-          setConflictRemote({
-            workspace: res.remoteWorkspace,
-            modifiedTime: res.modifiedTime,
-            fileId: res.fileId,
-          });
-          setSyncStatus('conflict', 'Remote Drive file changed on another device.');
-          showToast('Google Drive sync conflict — open Google Sync to resolve.');
-        } else {
-          lastSyncedRev.current = dirtyRevision;
-          updateGoogleSync({
-            driveFileId: res.fileId,
-            remoteModifiedTime: res.modifiedTime,
-            lastSyncedAt: new Date().toISOString(),
-          });
-          setSyncStatus('saved');
-        }
-      } catch (err) {
-        setSyncStatus('error', err instanceof Error ? err.message : 'Auto-sync failed.');
-      }
-    }, 2000);
-
+    const timer = setTimeout(() => {
+      void syncDriveNow();
+    }, 1500);
     return () => clearTimeout(timer);
-  }, [dirtyRevision, googleSession, workspace, setSyncStatus, updateGoogleSync, showToast]);
+  }, [dirtyRevision, googleSession, syncDriveNow]);
 
   if (!hydrated) {
     return (
@@ -291,7 +337,7 @@ export default function App() {
             editingCell={activeEdit ? { date: activeEdit.date, periodId: activeEdit.periodId } : null}
             onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
             onStartEdit={handleStartEdit}
-            onStopEdit={() => setActiveEdit(null)}
+            onStopEdit={finishEditingCell}
             onPrevWeek={() => goToWeek(safeWeekIdx - 1)}
             onNextWeek={() => goToWeek(safeWeekIdx + 1)}
             onJumpWeek={goToWeek}
@@ -307,7 +353,7 @@ export default function App() {
             editingCell={activeEdit ? { date: activeEdit.date, periodId: activeEdit.periodId } : null}
             onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
             onStartEdit={handleStartEdit}
-            onStopEdit={() => setActiveEdit(null)}
+            onStopEdit={finishEditingCell}
           />
         )}
 
@@ -340,7 +386,7 @@ export default function App() {
           schedule={schedule}
           week={currentWeek}
           target={activeEdit}
-          onDone={() => setActiveEdit(null)}
+          onDone={finishEditingCell}
         />
       )}
 
@@ -371,6 +417,31 @@ export default function App() {
         conflictRemote={conflictRemote}
         onClearConflict={() => setConflictRemote(null)}
       />
+
+      {/* Subtle Auto-Save Status Pill (fades away cleanly when idle) */}
+      {showSaveBadge && (
+        <div
+          className={`fixed bottom-4 left-4 z-40 rounded-full px-3 py-1 text-[11px] font-semibold shadow-md border backdrop-blur transition-opacity ${
+            syncStatus === 'conflict'
+              ? 'bg-amber-50/95 border-amber-300 text-amber-900'
+              : syncStatus === 'error'
+                ? 'bg-red-50/95 border-red-300 text-red-800'
+                : 'bg-white/90 border-slate-200 text-slate-700'
+          }`}
+        >
+          {syncStatus === 'syncing'
+            ? 'Syncing to Google Drive…'
+            : syncStatus === 'conflict'
+              ? 'Drive sync conflict'
+              : syncStatus === 'error'
+                ? 'Drive sync error (saved locally)'
+                : localSaveStatus === 'saving'
+                  ? 'Saving…'
+                  : googleSession && syncStatus === 'saved'
+                    ? 'Saved to Drive ✓'
+                    : 'Saved locally ✓'}
+        </div>
+      )}
 
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 rounded-lg bg-slate-900 text-white text-xs font-medium px-3.5 py-2.5 shadow-xl max-w-md">

@@ -94,6 +94,9 @@ interface PlannerState {
   replaceWorkspace: (next: PlannerWorkspace) => void;
   updateGoogleSync: (patch: Partial<NonNullable<PlannerWorkspace['googleSync']>>) => void;
   setSyncStatus: (status: SyncStatus, error?: string | null) => void;
+  localSaveStatus: 'idle' | 'saving' | 'saved';
+  lastLocalSavedAt: string | null;
+  flushPersist: () => Promise<void>;
 
   // Undo / Redo
   undo: () => void;
@@ -103,19 +106,33 @@ interface PlannerState {
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-function schedulePersist(workspace: PlannerWorkspace, passphrase: string | null) {
-  if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(async () => {
-    try {
-      if (passphrase) {
-        const env = await encryptJSON(workspace, passphrase);
-        await idbSet(IDB_KEY, env);
-      } else {
-        await idbSet(IDB_KEY, workspace);
-      }
-    } catch (err) {
-      console.error('Failed to persist workspace to IndexedDB:', err);
+async function persistNow(
+  workspace: PlannerWorkspace,
+  passphrase: string | null,
+  onDone?: () => void,
+) {
+  try {
+    if (passphrase) {
+      const env = await encryptJSON(workspace, passphrase);
+      await idbSet(IDB_KEY, env);
+    } else {
+      await idbSet(IDB_KEY, workspace);
     }
+    onDone?.();
+  } catch (err) {
+    console.error('Failed to persist workspace to IndexedDB:', err);
+  }
+}
+
+function schedulePersist(
+  workspace: PlannerWorkspace,
+  passphrase: string | null,
+  onDone?: () => void,
+) {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void persistNow(workspace, passphrase, onDone);
   }, 250);
 }
 
@@ -151,6 +168,20 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   syncStatus: 'idle',
   syncError: null,
   dirtyRevision: 0,
+  localSaveStatus: 'idle',
+  lastLocalSavedAt: null,
+
+  flushPersist: async () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    const { workspace, lockPassphrase } = get();
+    set({ localSaveStatus: 'saving' });
+    await persistNow(workspace, lockPassphrase, () => {
+      set({ localSaveStatus: 'saved', lastLocalSavedAt: new Date().toISOString() });
+    });
+  },
 
   hydrate: async () => {
     try {
@@ -290,8 +321,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       past: [...state.past.slice(-(MAX_HISTORY - 1)), state.workspace.binders],
       future: [],
       dirtyRevision: state.dirtyRevision + 1,
+      localSaveStatus: 'saving',
     });
-    schedulePersist(nextWs, state.lockPassphrase);
+    schedulePersist(nextWs, state.lockPassphrase, () => {
+      set({ localSaveStatus: 'saved', lastLocalSavedAt: new Date().toISOString() });
+    });
   },
 
   bumpCourseForward: (courseId, date, periodId, scope) => {
