@@ -6,6 +6,7 @@ import {
   Cloud,
   CloudOff,
   Download,
+  FolderSync,
   Lock,
   Menu,
   Redo2,
@@ -22,6 +23,7 @@ import type {
 } from '../types/planner';
 import { formatWeekShortLabel, type ResolvedSchedule } from '../engine/cycleEngine';
 import type { SyncStatus } from '../store/usePlannerStore';
+import type { FileSyncStatus } from '../hooks/useLocalFileSync';
 
 const COVERS: { id: BinderCoverTheme; bg: string; label: string }[] = [
   { id: 'nist-blue', bg: '#1e4b94', label: 'NIST Blue' },
@@ -59,6 +61,9 @@ interface SidePanelProps {
   onOpenSetup: () => void;
   onOpenExport: () => void;
   onOpenGoogleSync: () => void;
+  fileSyncStatus: FileSyncStatus;
+  fileSyncName: string | null;
+  onOpenFileSync: () => void;
 }
 
 export const SidePanel: React.FC<SidePanelProps> = ({
@@ -89,6 +94,9 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onOpenSetup,
   onOpenExport,
   onOpenGoogleSync,
+  fileSyncStatus,
+  fileSyncName,
+  onOpenFileSync,
 }) => {
   const syncDot =
     syncStatus === 'saved'
@@ -100,6 +108,23 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           : syncStatus === 'error'
             ? 'bg-red-500'
             : null;
+
+  const fileLabel: Record<FileSyncStatus, string> = {
+    unsupported: 'Backup file',
+    unlinked: 'Set up sync file',
+    'needs-permission': 'Reconnect sync file',
+    idle: 'Synced',
+    saving: 'Saving…',
+    conflict: 'Conflict',
+    error: 'Error',
+  };
+  const fileLinked = ['idle', 'saving', 'conflict', 'error'].includes(fileSyncStatus);
+  const fileTone =
+    fileSyncStatus === 'idle' || fileSyncStatus === 'saving'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
+      : fileSyncStatus === 'conflict' || fileSyncStatus === 'error'
+        ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+        : 'border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100';
 
   return (
     <>
@@ -301,6 +326,24 @@ export const SidePanel: React.FC<SidePanelProps> = ({
 
           {/* Actions */}
           <div className="space-y-1.5 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenFileSync();
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border font-semibold cursor-pointer transition ${fileTone}`}
+              title="Sync to a file in your OneDrive / Dropbox / iCloud folder — no sign-in needed"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <FolderSync className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {fileLinked && fileSyncName ? fileSyncName : fileLabel[fileSyncStatus]}
+                </span>
+              </span>
+              {fileLinked && <span className="text-[10px] opacity-80">{fileLabel[fileSyncStatus]}</span>}
+            </button>
+
             <button
               type="button"
               onClick={() => {

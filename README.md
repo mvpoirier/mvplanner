@@ -24,6 +24,8 @@ Live deployment: **https://mvpoirier.github.io/mvplanner/**
   6. RFC 5545 Calendar Feed (`.ics`) & Standalone Offline HTML / Markdown Archive
 - **Milestone 2 — Zero-Backend Google Drive & Sheets Sync**: Client-side Google Identity Services (GIS) OAuth saves your full workspace to a private `mvplanner-workspace.json` file in your Google Drive (with `modifiedTime` conflict guard), imports/refreshes from your Google Sheet without wiping lesson notes, and optionally pushes a plain-text mirror to a `MVPlanner_Mirror` tab.
 
+- **Linked Sync File (no sign-in)**: Link a `mvplanner-workspace.json` file inside a folder that OneDrive, Dropbox, iCloud or Google Drive for desktop already syncs. Every edit saves to it automatically; on open (and whenever you return to the tab) MVPlanner loads newer changes from your other computers, and asks which copy to keep if both changed. Works without Google OAuth, so it keeps working if a school blocks third-party sign-in. Chrome/Edge only (File System Access API); other browsers get manual download/open buttons. Encrypted with your passphrase when the lock is on.
+
 ---
 
 ## Development
