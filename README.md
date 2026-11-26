@@ -37,6 +37,11 @@ npm run dev     # http://localhost:5173/mvplanner/
 npm run build   # Type-checks and builds static bundle into dist/
 ```
 
+### Deployment
+
+Every push to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes `dist/` to GitHub Pages.
+One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. To bake in a Google Client ID, add a repository variable `VITE_GOOGLE_CLIENT_ID` (Settings → Secrets and variables → Actions → Variables).
+
 ---
 
 ## Google Cloud Console OAuth Setup Guide (Milestone 2)
