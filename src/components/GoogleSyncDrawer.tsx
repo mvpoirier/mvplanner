@@ -1,5 +1,5 @@
-// Milestone 2: Google Sign-In (GIS OAuth), Private Google Drive JSON Sync (with conflict guard),
-// and Google Sheets Import/Refresh + Optional Plain-Text Mirror Push.
+// Milestone 2: 1-Click Google Sign-In (baked-in Client ID + collapsible custom Client ID & guided links),
+// Private Google Drive JSON Sync (with conflict guard), and Google Sheets Import/Refresh + Plain-Text Mirror Push.
 
 import React, { useState } from 'react';
 import {
@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   Cloud,
   CloudUpload,
+  Copy,
+  ExternalLink,
   FileSpreadsheet,
   LogIn,
   LogOut,
@@ -16,6 +18,7 @@ import {
 import type { AcademicYearBinder, PlannerWorkspace } from '../types/planner';
 import { usePlannerStore } from '../store/usePlannerStore';
 import {
+  DEFAULT_GOOGLE_CLIENT_ID,
   getActiveSession,
   getConfiguredClientId,
   saveCustomClientId,
@@ -73,12 +76,14 @@ export const GoogleSyncDrawer: React.FC<GoogleSyncDrawerProps> = ({
   const handleSignIn = async () => {
     setBusy(true);
     try {
-      saveCustomClientId(clientId);
-      const sess = await signInWithGoogle(clientId);
+      const effectiveId = clientId.trim() || DEFAULT_GOOGLE_CLIENT_ID;
+      if (effectiveId !== DEFAULT_GOOGLE_CLIENT_ID) {
+        saveCustomClientId(effectiveId);
+      }
+      const sess = await signInWithGoogle(effectiveId);
       onSessionChange(sess);
       showToast(`Signed in as ${sess.profile?.email ?? 'Google User'}.`);
 
-      // Check if mvplanner-workspace.json already exists in Drive
       setSyncStatus('syncing');
       const existing = await findWorkspaceDriveFile(sess.accessToken);
       if (existing) {
@@ -201,6 +206,9 @@ export const GoogleSyncDrawer: React.FC<GoogleSyncDrawerProps> = ({
     }
   };
 
+  const currentOrigin =
+    typeof window !== 'undefined' ? window.location.origin : 'https://mvpoirier.github.io';
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex justify-end">
       <div className="w-full max-w-md bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col">
@@ -210,7 +218,7 @@ export const GoogleSyncDrawer: React.FC<GoogleSyncDrawerProps> = ({
             <div>
               <h2 className="text-sm font-bold text-slate-900">Google Drive &amp; Sheets Sync</h2>
               <p className="text-[11px] text-slate-500">
-                Zero-backend client-side OAuth (GIS) · Private Drive JSON
+                Private Drive JSON · Syncs automatically across laptop &amp; phone
               </p>
             </div>
           </div>
@@ -271,34 +279,89 @@ export const GoogleSyncDrawer: React.FC<GoogleSyncDrawerProps> = ({
               </>
             ) : (
               <>
-                <div className="font-bold text-slate-900">Connect Your Google Account</div>
-                <p className="text-[11px] text-slate-600">
-                  Saves all binders, rich notes, ink colors &amp; markers into a private{' '}
+                <div className="font-bold text-slate-900">1-Click Google Account Sync</div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Sign in with Google to save all your binders, rich notes, ink colors &amp; markers into a private{' '}
                   <code className="bg-white px-1 rounded">mvplanner-workspace.json</code> file in your own Google Drive.
                 </p>
-                <label className="flex flex-col gap-1">
-                  <span className="font-semibold text-slate-700">
-                    Google OAuth Web Client ID
-                  </span>
-                  <input
-                    type="text"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    placeholder="123456789-xxxx.apps.googleusercontent.com"
-                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-[11px]"
-                  />
-                </label>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={handleSignIn}
-                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-40 cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-40 cursor-pointer shadow-xs"
                 >
                   <LogIn className="w-4 h-4" /> Sign in with Google
                 </button>
-                <p className="text-[10.5px] text-slate-500">
-                  See <strong>README.md</strong> for the 2-minute free Google Cloud Console setup guide (authorized origins: <code>https://mvpoirier.github.io</code> &amp; <code>http://localhost:5173</code>).
-                </p>
+
+                <details className="rounded-lg border border-slate-200 bg-white p-2.5 text-[11px]">
+                  <summary className="font-semibold text-slate-700 cursor-pointer">
+                    Advanced: Custom OAuth Client ID &amp; Self-Hosting Links
+                  </summary>
+                  <div className="mt-2.5 space-y-2.5 text-slate-600">
+                    <ol className="list-decimal pl-4 space-y-1.5">
+                      <li>
+                        Enable{' '}
+                        <a
+                          href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline text-blue-700 inline-flex items-center gap-0.5"
+                        >
+                          Drive API <ExternalLink className="w-2.5 h-2.5" />
+                        </a>{' '}
+                        &amp;{' '}
+                        <a
+                          href="https://console.cloud.google.com/apis/library/sheets.googleapis.com"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline text-blue-700 inline-flex items-center gap-0.5"
+                        >
+                          Sheets API <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </li>
+                      <li>
+                        Create an OAuth Web Client ID in{' '}
+                        <a
+                          href="https://console.cloud.google.com/apis/credentials"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline text-blue-700 inline-flex items-center gap-0.5"
+                        >
+                          Google Cloud Credentials <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </li>
+                      <li>
+                        Add Authorized JavaScript Origin:
+                        <div className="mt-1 flex items-center gap-1">
+                          <code className="flex-1 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                            {currentOrigin}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(currentOrigin);
+                              showToast(`Copied ${currentOrigin}`);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 font-semibold cursor-pointer"
+                          >
+                            <Copy className="w-3 h-3" /> Copy
+                          </button>
+                        </div>
+                      </li>
+                    </ol>
+
+                    <label className="flex flex-col gap-1 pt-1">
+                      <span className="font-semibold text-slate-700">OAuth Web Client ID</span>
+                      <input
+                        type="text"
+                        value={clientId}
+                        onChange={(e) => setClientId(e.target.value)}
+                        placeholder={DEFAULT_GOOGLE_CLIENT_ID}
+                        className="rounded border border-slate-300 bg-slate-50 px-2 py-1 font-mono text-[10px]"
+                      />
+                    </label>
+                  </div>
+                </details>
               </>
             )}
             {syncError && (
@@ -316,7 +379,8 @@ export const GoogleSyncDrawer: React.FC<GoogleSyncDrawerProps> = ({
                 Sync Conflict Detected
               </div>
               <p className="text-[11px] text-amber-900">
-                Your Drive file was updated on another device ({new Date(conflictRemote.modifiedTime).toLocaleString()}). Choose which version to keep:
+                Your Drive file was updated on another device (
+                {new Date(conflictRemote.modifiedTime).toLocaleString()}). Choose which version to keep:
               </p>
               <div className="flex gap-2">
                 <button
@@ -357,7 +421,8 @@ export const GoogleSyncDrawer: React.FC<GoogleSyncDrawerProps> = ({
               Google Sheets Integration
             </div>
             <p className="text-[11px] text-slate-600">
-              Paste your <code>MVP Timetable 2026-2027</code> URL or Sheet ID to import or refresh <code>Grid</code> + <code>FINAL</code> structure without wiping your lesson notes.
+              Paste your <code>MVP Timetable 2026-2027</code> URL or Sheet ID to import or refresh{' '}
+              <code>Grid</code> + <code>FINAL</code> structure without wiping your lesson notes.
             </p>
             <input
               type="text"

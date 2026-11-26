@@ -1,4 +1,5 @@
-// Pixel-locked 3D 2-Ring Binder Spread with 3D page-flip animation and right-edge quick tabs.
+// Pixel-locked Full-Screen 3D 2-Ring Binder Spread with outer-edge / corner-curl page turning,
+// 3D page-flip animation, double-click inline editing, and right-edge monthly tabs.
 
 import React from 'react';
 import type { AcademicYearBinder, BinderCoverTheme } from '../types/planner';
@@ -25,8 +26,19 @@ interface BinderSpreadProps {
   coverTheme: BinderCoverTheme;
   flipDir: 'next' | 'prev' | null;
   flipKey: number;
+  canPrev: boolean;
+  canNext: boolean;
   selectedCell: SelectedCell | null;
+  editingCell: SelectedCell | null;
   onSelectCell: (date: string, periodId: string) => void;
+  onStartEdit: (
+    date: string,
+    periodId: string,
+    rect: { top: number; bottom: number; left: number; width: number },
+  ) => void;
+  onStopEdit: () => void;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
   onJumpWeek: (weekIdx: number) => void;
 }
 
@@ -37,11 +49,17 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   coverTheme,
   flipDir,
   flipKey,
+  canPrev,
+  canNext,
   selectedCell,
+  editingCell,
   onSelectCell,
+  onStartEdit,
+  onStopEdit,
+  onPrevWeek,
+  onNextWeek,
   onJumpWeek,
 }) => {
-  // Build month index tabs along the right binder edge (one tab per month in the binder)
   const monthTabs: { label: string; weekIndex: number; color: { bg: string; text: string } }[] = [];
   const seenMonths = new Set<string>();
   schedule.weeks.forEach((w, idx) => {
@@ -51,7 +69,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
       monthTabs.push({
         label: m,
         weekIndex: idx,
-        color: TAB_COLORS[(monthTabs.length) % TAB_COLORS.length],
+        color: TAB_COLORS[monthTabs.length % TAB_COLORS.length],
       });
     }
   });
@@ -61,7 +79,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   return (
     <div className={`binder-shell cover-${coverTheme}`}>
       {/* Right-edge monthly binder divider tabs */}
-      <div className="binder-tabs hidden xl:flex">
+      <div className="binder-tabs hidden lg:flex">
         {monthTabs.map((tab) => (
           <button
             key={tab.label}
@@ -101,25 +119,56 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
 
         {/* Left Page (Verso): Mon–Wed */}
         <section className="paper-sheet paper-left">
+          <div
+            className={`edge-turn-zone edge-turn-prev ${!canPrev ? 'disabled' : ''}`}
+            onClick={() => canPrev && onPrevWeek()}
+            title={canPrev ? 'Click edge to flip to previous week' : undefined}
+          />
+          <div
+            className={`corner-curl corner-curl-prev ${!canPrev ? 'disabled' : ''}`}
+            onClick={() => canPrev && onPrevWeek()}
+            title="Previous week"
+          />
+          {canPrev && <div className="corner-hint corner-hint-prev">‹ Prev Week</div>}
+
           <div className="page-meta-bar">
             <span className="font-bold text-slate-800 tracking-tight">
               {formatWeekHeading(week)}
             </span>
             <span className="text-[10px] text-slate-500">
-              {binder.archived ? 'Archived · Read-Only' : 'Teaching Weeks (excludes breaks)'}
+              {binder.archived
+                ? 'Archived · Read-Only'
+                : 'Double-click any cell to edit · Click corner to flip'}
             </span>
           </div>
-          <TimetableTable
-            binder={binder}
-            week={week}
-            dayIndices={[0, 1, 2]}
-            selectedCell={selectedCell}
-            onSelectCell={onSelectCell}
-          />
+          <div className="table-fit">
+            <TimetableTable
+              binder={binder}
+              week={week}
+              dayIndices={[0, 1, 2]}
+              selectedCell={selectedCell}
+              editingCell={editingCell}
+              onSelectCell={onSelectCell}
+              onStartEdit={onStartEdit}
+              onStopEdit={onStopEdit}
+            />
+          </div>
         </section>
 
         {/* Right Page (Recto): Thu–Fri + side-by-side NOTES panel */}
         <section className="paper-sheet paper-right">
+          <div
+            className={`edge-turn-zone edge-turn-next ${!canNext ? 'disabled' : ''}`}
+            onClick={() => canNext && onNextWeek()}
+            title={canNext ? 'Click edge to flip to next week' : undefined}
+          />
+          <div
+            className={`corner-curl corner-curl-next ${!canNext ? 'disabled' : ''}`}
+            onClick={() => canNext && onNextWeek()}
+            title="Next week"
+          />
+          {canNext && <div className="corner-hint corner-hint-next">Next Week ›</div>}
+
           <div className="page-meta-bar">
             <span className="text-[10.5px] font-semibold text-slate-600">{week.dateRange}</span>
             <span className="text-[10px] text-slate-500">
@@ -127,13 +176,16 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
             </span>
           </div>
           <div className="right-page-grid">
-            <div>
+            <div className="table-fit">
               <TimetableTable
                 binder={binder}
                 week={week}
                 dayIndices={[3, 4]}
                 selectedCell={selectedCell}
+                editingCell={editingCell}
                 onSelectCell={onSelectCell}
+                onStartEdit={onStartEdit}
+                onStopEdit={onStopEdit}
               />
             </div>
             <WeeklyNotesPanel binder={binder} week={week} />

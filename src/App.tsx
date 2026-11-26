@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { usePlannerStore } from './store/usePlannerStore';
-import { formatWeekHeading, resolveSchedule } from './engine/cycleEngine';
-import { TopToolbar } from './components/TopToolbar';
+import { resolveSchedule } from './engine/cycleEngine';
+import { SidePanel } from './components/SidePanel';
 import { BinderSpread } from './components/BinderSpread';
 import { FlatGridView } from './components/FlatGridView';
 import { PhoneAgendaView } from './components/PhoneAgendaView';
 import { AnnotationDock } from './components/AnnotationDock';
+import { FloatingEditBar, type ActiveEditTarget } from './components/FloatingEditBar';
 import { BinderShelfModal } from './components/BinderShelfModal';
 import { ExportStudioModal } from './components/ExportStudioModal';
 import { SetupWizardModal } from './components/SetupWizardModal';
@@ -28,6 +29,8 @@ export default function App() {
   const toastMessage = usePlannerStore((s) => s.toastMessage);
   const syncStatus = usePlannerStore((s) => s.syncStatus);
   const dirtyRevision = usePlannerStore((s) => s.dirtyRevision);
+  const canUndo = usePlannerStore((s) => s.past.length > 0);
+  const canRedo = usePlannerStore((s) => s.future.length > 0);
 
   const hydrate = usePlannerStore((s) => s.hydrate);
   const unlockWithPassphrase = usePlannerStore((s) => s.unlockWithPassphrase);
@@ -45,12 +48,14 @@ export default function App() {
 
   const [unlockInput, setUnlockInput] = useState('');
   const [unlockErr, setUnlockErr] = useState('');
+  const [panelOpen, setPanelOpen] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [googleOpen, setGoogleOpen] = useState(false);
 
+  const [activeEdit, setActiveEdit] = useState<ActiveEditTarget | null>(null);
   const [flipDir, setFlipDir] = useState<'next' | 'prev' | null>(null);
   const [flipKey, setFlipKey] = useState(0);
 
@@ -63,7 +68,6 @@ export default function App() {
 
   const lastSyncedRev = useRef(0);
 
-  // Hydrate from IndexedDB on mount & auto-activate Phone view on narrow viewports
   useEffect(() => {
     hydrate();
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -82,6 +86,7 @@ export default function App() {
     (targetIdx: number) => {
       const clamped = Math.min(Math.max(0, targetIdx), schedule.weeks.length - 1);
       if (clamped === safeWeekIdx) return;
+      setActiveEdit(null);
       setFlipDir(clamped > safeWeekIdx ? 'next' : 'prev');
       setFlipKey((k) => k + 1);
       setWeekIndex(clamped);
@@ -89,7 +94,20 @@ export default function App() {
     [safeWeekIdx, schedule.weeks.length, setWeekIndex],
   );
 
-  // Keyboard shortcuts: Left/Right arrows flip weeks; Ctrl/Cmd+Z undo; Ctrl/Cmd+Shift+Z redo
+  // Close inline editor when clicking outside the edited cell or floating mini-toolbar
+  useEffect(() => {
+    if (!activeEdit) return;
+    const onDocClick = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el) return;
+      if (el.closest('.tt-slot.editing') || el.closest('.floating-toolbar')) return;
+      setActiveEdit(null);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [activeEdit]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -100,14 +118,14 @@ export default function App() {
         else undo();
         return;
       }
-      if (!inField && !shelfOpen && !wizardOpen && !exportOpen) {
+      if (!inField && !shelfOpen && !wizardOpen && !exportOpen && !activeEdit) {
         if (e.key === 'ArrowLeft') goToWeek(safeWeekIdx - 1);
         if (e.key === 'ArrowRight') goToWeek(safeWeekIdx + 1);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [goToWeek, safeWeekIdx, undo, redo, shelfOpen, wizardOpen, exportOpen]);
+  }, [goToWeek, safeWeekIdx, undo, redo, shelfOpen, wizardOpen, exportOpen, activeEdit]);
 
   // Debounced auto-save to private Google Drive JSON (2s after edits when signed in)
   useEffect(() => {
@@ -147,14 +165,7 @@ export default function App() {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [
-    dirtyRevision,
-    googleSession,
-    workspace,
-    setSyncStatus,
-    updateGoogleSync,
-    showToast,
-  ]);
+  }, [dirtyRevision, googleSession, workspace, setSyncStatus, updateGoogleSync, showToast]);
 
   if (!hydrated) {
     return (
@@ -164,7 +175,6 @@ export default function App() {
     );
   }
 
-  // Local AES-GCM Passphrase Unlock Gate
   if (locked) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-100">
@@ -216,13 +226,22 @@ export default function App() {
   const fontClass =
     workspace.uiPreferences.noteFont === 'handwritten' ? 'font-handwritten' : 'font-sans';
 
-  const cycleSummaryStr = currentWeek.days
-    .map((d) => d.occurrenceTag ?? (d.classification.pause ? 'Paused' : '—'))
-    .join(' · ');
+  const handleStartEdit = (
+    date: string,
+    periodId: string,
+    rect: { top: number; bottom: number; left: number; width: number },
+  ) => {
+    setSelectedCell({ date, periodId });
+    setActiveEdit({ date, periodId, rect });
+  };
 
   return (
-    <div className={`min-h-screen flex flex-col ${fontClass}`}>
-      <TopToolbar
+    <div className={`min-h-screen w-full ${fontClass}`}>
+      {/* Single Auto-Hide Corner Button + Slide-Out Overlay Side Panel */}
+      <SidePanel
+        open={panelOpen}
+        onToggle={() => setPanelOpen((o) => !o)}
+        onClose={() => setPanelOpen(false)}
         binder={activeBinder}
         schedule={schedule}
         weekIndex={safeWeekIdx}
@@ -232,6 +251,8 @@ export default function App() {
         isLockedEnabled={Boolean(lockPassphrase)}
         syncStatus={syncStatus}
         googleEmail={googleSession?.profile?.email ?? null}
+        canUndo={canUndo}
+        canRedo={canRedo}
         onPrevWeek={() => goToWeek(safeWeekIdx - 1)}
         onNextWeek={() => goToWeek(safeWeekIdx + 1)}
         onSelectWeek={goToWeek}
@@ -239,7 +260,12 @@ export default function App() {
         onToggleFont={() =>
           setNoteFont(workspace.uiPreferences.noteFont === 'handwritten' ? 'sans' : 'handwritten')
         }
-        onViewChange={setViewMode}
+        onViewChange={(m) => {
+          setActiveEdit(null);
+          setViewMode(m);
+        }}
+        onUndo={undo}
+        onRedo={redo}
         onOpenShelf={() => setShelfOpen(true)}
         onOpenWizard={() => setWizardOpen(true)}
         onOpenSetup={() => setSetupOpen(true)}
@@ -247,79 +273,46 @@ export default function App() {
         onOpenGoogleSync={() => setGoogleOpen(true)}
       />
 
-      <main className="desk-stage flex-1 px-3 md:px-10 py-4">
-        <div className="max-w-[1280px] mx-auto">
-          {/* Sub-header info strip */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 font-semibold text-slate-800 shadow-2xs">
-                {formatWeekHeading(currentWeek)} · ({cycleSummaryStr})
-              </span>
-              {activeBinder.id === 'demo-2026-2027' && !googleSession && (
-                <span className="text-[11px] text-slate-500">
-                  Interactive zero-PII demo —{' '}
-                  <button
-                    type="button"
-                    onClick={() => setGoogleOpen(true)}
-                    className="underline font-semibold text-blue-700 cursor-pointer"
-                  >
-                    Sign in with Google
-                  </button>{' '}
-                  or click{' '}
-                  <button
-                    type="button"
-                    onClick={() => setWizardOpen(true)}
-                    className="underline font-semibold text-blue-700 cursor-pointer"
-                  >
-                    New Planner
-                  </button>{' '}
-                  to build yours.
-                </span>
-              )}
-            </div>
+      {/* Full-Screen Desk Stage */}
+      <main
+        className={`desk-stage ${viewMode !== 'phone' ? 'desk-fullscreen' : 'flex-col py-12 px-3'}`}
+      >
+        {viewMode === 'binder' && (
+          <BinderSpread
+            binder={activeBinder}
+            schedule={schedule}
+            week={currentWeek}
+            coverTheme={workspace.uiPreferences.coverTheme}
+            flipDir={flipDir}
+            flipKey={flipKey}
+            canPrev={safeWeekIdx > 0}
+            canNext={safeWeekIdx < schedule.weeks.length - 1}
+            selectedCell={selectedCell}
+            editingCell={activeEdit ? { date: activeEdit.date, periodId: activeEdit.periodId } : null}
+            onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
+            onStartEdit={handleStartEdit}
+            onStopEdit={() => setActiveEdit(null)}
+            onPrevWeek={() => goToWeek(safeWeekIdx - 1)}
+            onNextWeek={() => goToWeek(safeWeekIdx + 1)}
+            onJumpWeek={goToWeek}
+          />
+        )}
 
-            <div className="hidden sm:flex items-center gap-2.5 text-[11px]">
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#3a3f47] inline-block" />
-                Pencil
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#1648a8] inline-block" />
-                Blue
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#c02323] inline-block" />
-                Red Urgent
-              </span>
-            </div>
-          </div>
+        {viewMode === 'flat' && (
+          <FlatGridView
+            binder={activeBinder}
+            schedule={schedule}
+            week={currentWeek}
+            selectedCell={selectedCell}
+            editingCell={activeEdit ? { date: activeEdit.date, periodId: activeEdit.periodId } : null}
+            onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
+            onStartEdit={handleStartEdit}
+            onStopEdit={() => setActiveEdit(null)}
+          />
+        )}
 
-          {/* Active View */}
-          {viewMode === 'binder' && (
-            <BinderSpread
-              binder={activeBinder}
-              schedule={schedule}
-              week={currentWeek}
-              coverTheme={workspace.uiPreferences.coverTheme}
-              flipDir={flipDir}
-              flipKey={flipKey}
-              selectedCell={selectedCell}
-              onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
-              onJumpWeek={goToWeek}
-            />
-          )}
-
-          {viewMode === 'flat' && (
-            <FlatGridView
-              binder={activeBinder}
-              schedule={schedule}
-              week={currentWeek}
-              selectedCell={selectedCell}
-              onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
-            />
-          )}
-
-          {viewMode === 'phone' && (
+        {viewMode === 'phone' && (
+          <div className="w-full max-w-md mx-auto">
             <PhoneAgendaView
               binder={activeBinder}
               week={currentWeek}
@@ -328,17 +321,28 @@ export default function App() {
               onSelectDay={setPhoneDayIndex}
               onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
             />
-          )}
-
-          {/* Inline Editor & Smart Bump Dock */}
-          <AnnotationDock
-            binder={activeBinder}
-            schedule={schedule}
-            week={currentWeek}
-            selectedCell={selectedCell}
-          />
-        </div>
+            {selectedCell && (
+              <AnnotationDock
+                binder={activeBinder}
+                schedule={schedule}
+                week={currentWeek}
+                selectedCell={selectedCell}
+              />
+            )}
+          </div>
+        )}
       </main>
+
+      {/* Floating Mini-Toolbar (only visible while double-click inline editing) */}
+      {activeEdit && viewMode !== 'phone' && (
+        <FloatingEditBar
+          binder={activeBinder}
+          schedule={schedule}
+          week={currentWeek}
+          target={activeEdit}
+          onDone={() => setActiveEdit(null)}
+        />
+      )}
 
       {/* Modals & Drawers */}
       <BinderShelfModal
@@ -368,7 +372,6 @@ export default function App() {
         onClearConflict={() => setConflictRemote(null)}
       />
 
-      {/* Toast */}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 rounded-lg bg-slate-900 text-white text-xs font-medium px-3.5 py-2.5 shadow-xl max-w-md">
           {toastMessage}

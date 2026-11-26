@@ -1,7 +1,8 @@
 // Shared pure timetable table (ZERO rowspan!) & sibling Weekly NOTES panel.
-// Strictly enforces §4.1 so Left (Mon–Wed) and Right (Thu–Fri) rows stay pixel-locked across the spine.
+// Strictly enforces §4.1 pixel-lock across Left & Right pages while fitting 100% of the viewport height.
+// Supports double-click inline cell editing & double-click inline weekly note editing.
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   cellKey,
   type AcademicYearBinder,
@@ -11,7 +12,7 @@ import {
 import { resolveSlot, type ResolvedWeek } from '../engine/cycleEngine';
 import { usePlannerStore, type SelectedCell } from '../store/usePlannerStore';
 
-function getRowHeightPx(period: PeriodRow): number {
+function getRowWeight(period: PeriodRow): number {
   if (period.height) return period.height;
   if (period.kind === 'divider') return 20;
   if (period.id === 'AM') return 48;
@@ -24,7 +25,14 @@ interface TimetableTableProps {
   week: ResolvedWeek;
   dayIndices: number[];
   selectedCell: SelectedCell | null;
+  editingCell: SelectedCell | null;
   onSelectCell: (date: string, periodId: string) => void;
+  onStartEdit: (
+    date: string,
+    periodId: string,
+    rect: { top: number; bottom: number; left: number; width: number },
+  ) => void;
+  onStopEdit: () => void;
 }
 
 export const TimetableTable: React.FC<TimetableTableProps> = ({
@@ -32,9 +40,26 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
   week,
   dayIndices,
   selectedCell,
+  editingCell,
   onSelectCell,
+  onStartEdit,
+  onStopEdit,
 }) => {
+  const updateCellPlan = usePlannerStore((s) => s.updateCellPlan);
+  const inlineRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editingCell && inlineRef.current) {
+      const el = inlineRef.current;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [editingCell?.date, editingCell?.periodId]);
+
   const dayPct = Math.floor(81 / dayIndices.length);
+  const totalWeight = binder.periods.reduce((acc, p) => acc + getRowWeight(p), 0) || 1;
+  // Reserve ~11.5% for the 3 header rows; distribute remaining ~88.5% proportionally across periods
+  const bodyBudgetPct = 88.5;
 
   return (
     <table className="tt-table">
@@ -103,11 +128,11 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
         </tr>
 
         {binder.periods.map((period) => {
-          const h = getRowHeightPx(period);
+          const pct = ((getRowWeight(period) / totalWeight) * bodyBudgetPct).toFixed(3);
 
           if (period.kind === 'divider') {
             return (
-              <tr key={period.id} className="tt-divider-row" style={{ height: `${h}px` }}>
+              <tr key={period.id} className="tt-divider-row" style={{ height: `${pct}%` }}>
                 <td colSpan={2}>{period.label}</td>
                 {dayIndices.map((di) => {
                   const d = week.days[di];
@@ -131,7 +156,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
           }
 
           return (
-            <tr key={period.id} style={{ height: `${h}px` }}>
+            <tr key={period.id} style={{ height: `${pct}%` }}>
               <td className="tt-time-col text-[10px]">{period.label}</td>
               <td style={{ padding: 0, verticalAlign: 'stretch' }}>
                 <div className="tt-time-sub">
@@ -152,6 +177,9 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                 const plan = binder.cellPlans[cellKey(day.iso, period.id)];
                 const isSelected =
                   selectedCell?.date === day.iso && selectedCell?.periodId === period.id;
+                const isEditing =
+                  editingCell?.date === day.iso && editingCell?.periodId === period.id;
+                const canEdit = !binder.archived && !slot.exceptionKind;
 
                 let bgStyle: React.CSSProperties = {};
                 let extraClass = '';
@@ -183,9 +211,22 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                 return (
                   <td
                     key={day.iso}
-                    className={`tt-slot ${extraClass} ${isSelected ? 'selected' : ''}`}
+                    className={`tt-slot ${extraClass} ${isSelected ? 'selected' : ''} ${
+                      isEditing ? 'editing' : ''
+                    }`}
                     style={bgStyle}
                     onClick={() => onSelectCell(day.iso, period.id)}
+                    onDoubleClick={(e) => {
+                      if (!canEdit) return;
+                      e.stopPropagation();
+                      const r = e.currentTarget.getBoundingClientRect();
+                      onStartEdit(day.iso, period.id, {
+                        top: r.top,
+                        bottom: r.bottom,
+                        left: r.left,
+                        width: r.width,
+                      });
+                    }}
                     data-date={day.iso}
                     data-period={period.id}
                   >
@@ -211,7 +252,9 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                         {slot.course ? (
                           <div
                             className="course-tag"
-                            style={slot.course.textColor ? { color: slot.course.textColor } : undefined}
+                            style={
+                              slot.course.textColor ? { color: slot.course.textColor } : undefined
+                            }
                           >
                             <span>{slot.course.code}</span>
                             <span className="flex items-center gap-1">
@@ -232,26 +275,45 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                           </div>
                         ) : null}
 
-                        <div className="flex-1 overflow-hidden">
-                          {lines.map((line, i) => {
-                            const cls = [
-                              'note-line',
-                              inkClass,
-                              plan?.circled && i === 0 ? 'marker-circled' : '',
-                              plan?.strike ? 'marker-strike' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ');
-                            return (
-                              <div key={i} className="my-0.5">
-                                <span className={cls}>
-                                  {plan?.star && i === 0 ? '★ ' : ''}
-                                  {line}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        {isEditing ? (
+                          <textarea
+                            ref={inlineRef}
+                            value={plan?.text ?? ''}
+                            onChange={(e) =>
+                              updateCellPlan(day.iso, period.id, { text: e.target.value })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                onStopEdit();
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Type lesson note…"
+                            className={`inline-cell-editor ${inkClass}`}
+                          />
+                        ) : (
+                          <div className="flex-1 overflow-hidden">
+                            {lines.map((line, i) => {
+                              const cls = [
+                                'note-line',
+                                inkClass,
+                                plan?.circled && i === 0 ? 'marker-circled' : '',
+                                plan?.strike ? 'marker-strike' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ');
+                              return (
+                                <div key={i} className="my-0.5">
+                                  <span className={cls}>
+                                    {plan?.star && i === 0 ? '★ ' : ''}
+                                    {line}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </td>
@@ -272,10 +334,13 @@ interface NotesPanelProps {
 
 export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) => {
   const addWeeklyNote = usePlannerStore((s) => s.addWeeklyNote);
+  const updateWeeklyNote = usePlannerStore((s) => s.updateWeeklyNote);
   const deleteWeeklyNote = usePlannerStore((s) => s.deleteWeeklyNote);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [ink, setInk] = useState<InkTone>('blue');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
 
   const notes = binder.weeklyNotes[week.mondayIso] ?? [];
 
@@ -294,11 +359,62 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
         {notes.map((n) => {
           const inkCls =
             n.ink === 'red' ? 'ink-red' : n.ink === 'blue' ? 'ink-blue' : 'ink-pencil';
+
+          if (editingId === n.id) {
+            return (
+              <div key={n.id} className="p-1 rounded border border-blue-400 bg-white space-y-1">
+                <textarea
+                  rows={2}
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  className="w-full text-[10px] border border-slate-200 rounded p-1 focus:outline-none"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setEditingId(null);
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      if (editDraft.trim()) updateWeeklyNote(week.mondayIso, n.id, editDraft.trim());
+                      setEditingId(null);
+                    }
+                  }}
+                />
+                <div className="flex justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="text-[9.5px] px-1.5 py-0.5 text-slate-500 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editDraft.trim()) updateWeeklyNote(week.mondayIso, n.id, editDraft.trim());
+                      setEditingId(null);
+                    }}
+                    className="text-[9.5px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold cursor-pointer"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
           return (
-            <div key={n.id} className={`callout-chip group relative pr-4 ${inkCls}`}>
+            <div
+              key={n.id}
+              className={`callout-chip group relative pr-4 cursor-pointer ${inkCls}`}
+              onDoubleClick={() => {
+                if (binder.archived) return;
+                setEditingId(n.id);
+                setEditDraft(n.text);
+              }}
+              title="Double-click to edit note"
+            >
               <span>{n.text}</span>
               {!binder.archived && (
                 <button
+                  type="button"
                   onClick={() => deleteWeeklyNote(week.mondayIso, n.id)}
                   className="opacity-0 group-hover:opacity-100 absolute right-1 top-0.5 text-[9px] text-slate-400 hover:text-red-600 cursor-pointer"
                   title="Remove note"

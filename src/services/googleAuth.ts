@@ -53,14 +53,19 @@ declare global {
 let gisScriptPromise: Promise<void> | null = null;
 let currentSession: GoogleAuthSession | null = null;
 
+export const DEFAULT_GOOGLE_CLIENT_ID =
+  '230821830423-ndu4ulp9unu970mia4jeqght530phij4.apps.googleusercontent.com';
+
 export function getConfiguredClientId(): string {
   const envId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
   if (envId) return envId;
   try {
-    return localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim() ?? '';
+    const custom = localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim();
+    if (custom) return custom;
   } catch {
-    return '';
+    // ignore storage errors
   }
+  return DEFAULT_GOOGLE_CLIENT_ID;
 }
 
 export function saveCustomClientId(clientId: string): void {
