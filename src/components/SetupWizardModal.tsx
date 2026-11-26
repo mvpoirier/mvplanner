@@ -1,5 +1,5 @@
 // Guided 5-Step Bespoke Yearly Timetable Setup Wizard (spec §6):
-// Step 1: Starting Point (Clone / NIST Preset / Blank Custom Cycle / Import .xlsx)
+// Step 1: NIST School Setup (any school year) or Other School / Custom cycle; fast-track Clone / Import
 // Step 2: Year Dates & Interactive Bell Row Builder
 // Step 3: Courses, Duties & Pastel Palette
 // Step 4: Visual Cycle Grid Painter with live Load Counters
@@ -12,6 +12,7 @@ import {
   ArrowUp,
   Calendar,
   Check,
+  Copy,
   FileSpreadsheet,
   Plus,
   Trash2,
@@ -26,6 +27,14 @@ import type {
   PeriodRow,
 } from '../types/planner';
 import { createNist2026Binder, NIST_PERIODS } from '../presets/nist2026_2027';
+import {
+  createBlankBinderForYear,
+  createNistBinderForYear,
+  currentSchoolYearStart,
+  defaultYearDates,
+  nistYearOptions,
+  schoolYearLabel,
+} from '../presets/schoolYears';
 import { resolveSchedule } from '../engine/cycleEngine';
 import { BEHAVIOR_LABELS } from '../engine/exceptionResolver';
 import { usePlannerStore } from '../store/usePlannerStore';
@@ -97,6 +106,19 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ open, onClos
   const [recPeriodId, setRecPeriodId] = useState('AM');
   const [recText, setRecText] = useState('');
 
+  // Step 1 choice
+  const currentYear = currentSchoolYearStart();
+  const yearOptions = useMemo(() => nistYearOptions(), []);
+  const [choice, setChoice] = useState<'nist' | 'custom'>('nist');
+  const [nistYear, setNistYear] = useState<number | 'custom'>(currentYear);
+  const [customStart, setCustomStart] = useState(() => defaultYearDates(currentYear).startDate);
+  const [customFirst, setCustomFirst] = useState(() => defaultYearDates(currentYear).firstCycleDate);
+  const [customEnd, setCustomEnd] = useState(() => defaultYearDates(currentYear).endDate);
+  const [customCycleIdx, setCustomCycleIdx] = useState(
+    () => CYCLE_PRESETS.findIndex((c) => c.letters.length === 5),
+  );
+  const [cloneMenuOpen, setCloneMenuOpen] = useState(false);
+
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const icsInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,17 +139,6 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ open, onClos
   if (!open) return null;
 
   const existingBinders = Object.values(workspace.binders);
-
-  const startFromNist = () => {
-    setDraft(
-      createNist2026Binder({
-        id: `binder-${Date.now()}`,
-        title: 'NIST 2026–2027',
-        schoolLabel: 'NIST 26/27',
-      }),
-    );
-    setStep(2);
-  };
 
   const startFromClone = (sourceId: string) => {
     const src = workspace.binders[sourceId];
@@ -151,25 +162,35 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ open, onClos
     setStep(2);
   };
 
-  const startFromBlank = () => {
-    setDraft({
-      id: `binder-${Date.now()}`,
-      title: '2026–2027 Timetable',
-      schoolLabel: '26/27',
-      archived: false,
-      startDate: '2026-08-17',
-      endDate: '2027-06-18',
-      firstCycleDate: '2026-08-17',
-      cycleLetters: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
-      periods: structuredClone(NIST_PERIODS),
-      courses: {},
-      cycleGrid: {},
-      exceptions: [],
-      recurringRules: [],
-      cellPlans: {},
-      weeklyNotes: {},
-      createdAt: new Date().toISOString(),
-    });
+  const customCycle = CYCLE_PRESETS[customCycleIdx] ?? CYCLE_PRESETS[0];
+  const nistYearLabel =
+    nistYear === 'custom' ? 'custom dates' : schoolYearLabel(nistYear);
+  const step1Summary =
+    choice === 'nist'
+      ? `NIST A–J · ${nistYearLabel}`
+      : `${customCycle.label.split(' (')[0]} cycle · ${schoolYearLabel(currentYear)}`;
+
+  /** Build the draft binder from the Step 1 choice and move on to Step 2. */
+  const confirmStep1 = () => {
+    if (choice === 'nist') {
+      if (nistYear === 'custom') {
+        if (!customStart || !customEnd || customEnd <= customStart) {
+          showToast('Pick a first day and a later last day for your custom dates.');
+          return;
+        }
+        setDraft(
+          createNistBinderForYear(Number(customStart.slice(0, 4)), {
+            startDate: customStart,
+            endDate: customEnd,
+            firstCycleDate: customFirst && customFirst >= customStart ? customFirst : customStart,
+          }),
+        );
+      } else {
+        setDraft(createNistBinderForYear(nistYear));
+      }
+    } else {
+      setDraft(createBlankBinderForYear(currentYear, customCycle.letters));
+    }
     setStep(2);
   };
 
@@ -331,77 +352,181 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ open, onClos
         <div className="p-5 overflow-y-auto flex-1 text-xs space-y-4">
           {/* STEP 1 */}
           {step === 1 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={startFromNist}
-                className="text-left p-4 rounded-xl border-2 border-blue-200 bg-blue-50/50 hover:border-blue-500 cursor-pointer transition"
-              >
-                <div className="font-bold text-sm text-blue-900">
-                  NIST 10-Day A–J Preset (2026–2027)
-                </div>
-                <p className="text-slate-600 mt-1">
-                  Pre-loaded with NIST bell times, A–J cycle, 14 Thailand/NIST holidays, and clean course palette (zero PII). Tweak any detail in Steps 2–5.
-                </p>
-              </button>
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  New Academic Year Binder — Step 1 of 5
+                </h3>
+                <p className="text-slate-500">Choose your school timetable structure to get started</p>
+              </div>
 
-              <button
-                type="button"
-                onClick={startFromBlank}
-                className="text-left p-4 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-slate-50 cursor-pointer transition"
-              >
-                <div className="font-bold text-sm text-slate-900">
-                  Blank Custom Cycle (5 / 6 / 8 / 10-Day)
-                </div>
-                <p className="text-slate-600 mt-1">
-                  Start fresh with your own cycle labels (A–J, Day 1–6, Week A/B), custom period rows, and courses.
-                </p>
-              </button>
-
-              <div className="p-4 rounded-xl border border-slate-200 space-y-2">
-                <div className="font-bold text-sm text-slate-900">Clone &amp; Tweak a Previous Year</div>
-                <p className="text-slate-600">
-                  Copies courses, colors, duties, and bell rows forward while clearing lesson notes.
-                </p>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {existingBinders.map((b) => (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => startFromClone(b.id)}
-                      className="px-2.5 py-1 rounded-md bg-slate-900 text-white font-semibold hover:bg-slate-800 cursor-pointer"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* NIST School Setup */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setChoice('nist')}
+                  onKeyDown={(e) => e.key === 'Enter' && setChoice('nist')}
+                  className={`text-left p-4 rounded-xl border-2 cursor-pointer transition space-y-3 ${
+                    choice === 'nist'
+                      ? 'border-blue-600 bg-blue-50/40 shadow-sm'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-bold text-sm text-slate-900">NIST School Setup</div>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                      Recommended
+                    </span>
+                  </div>
+                  <p className="text-slate-600">
+                    Pre-loaded with NIST&apos;s 10-day <strong>A–J</strong> rotating cycle, bell times (
+                    <span className="font-mono">AM · P1–P4 · Break · Lunch · ECA</span>), and pastel course
+                    palette.
+                  </p>
+                  <label className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <span className="font-semibold text-slate-600 shrink-0">School Year:</span>
+                    <select
+                      value={nistYear}
+                      onChange={(e) => {
+                        setChoice('nist');
+                        setNistYear(e.target.value === 'custom' ? 'custom' : Number(e.target.value));
+                      }}
+                      className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-semibold cursor-pointer"
                     >
-                      Clone "{b.title}"
-                    </button>
-                  ))}
+                      {yearOptions.map((o) => (
+                        <option key={o.startYear} value={o.startYear}>
+                          {o.label} {o.hasCalendar ? '(NIST Calendar Included)' : '(add holidays in Step 5)'}
+                        </option>
+                      ))}
+                      <option value="custom">Custom dates (Aug–Jun)</option>
+                    </select>
+                  </label>
+                  {nistYear === 'custom' && (
+                    <div className="grid grid-cols-3 gap-2" onClick={(e) => e.stopPropagation()}>
+                      {(
+                        [
+                          ['First day', customStart, setCustomStart],
+                          ['Cycle Day 1', customFirst, setCustomFirst],
+                          ['Last day', customEnd, setCustomEnd],
+                        ] as const
+                      ).map(([lbl, val, setter]) => (
+                        <label key={lbl} className="space-y-0.5">
+                          <span className="block text-[10.5px] font-semibold text-slate-500">{lbl}</span>
+                          <input
+                            type="date"
+                            value={val}
+                            onChange={(e) => setter(e.target.value)}
+                            className="w-full rounded-md border border-slate-300 px-1.5 py-1"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Other School / Custom */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setChoice('custom')}
+                  onKeyDown={(e) => e.key === 'Enter' && setChoice('custom')}
+                  className={`text-left p-4 rounded-xl border-2 cursor-pointer transition space-y-3 ${
+                    choice === 'custom'
+                      ? 'border-blue-600 bg-blue-50/40 shadow-sm'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-bold text-sm text-slate-900">Other School / Custom</div>
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
+                      Any Schedule
+                    </span>
+                  </div>
+                  <p className="text-slate-600">
+                    Build any rotating or fixed timetable from scratch — customize cycle length, period rows,
+                    courses, and holidays.
+                  </p>
+                  <label className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <span className="font-semibold text-slate-600 shrink-0">Cycle:</span>
+                    <select
+                      value={customCycleIdx}
+                      onChange={(e) => {
+                        setChoice('custom');
+                        setCustomCycleIdx(Number(e.target.value));
+                      }}
+                      className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-semibold cursor-pointer"
+                    >
+                      {CYCLE_PRESETS.map((c, i) => (
+                        <option key={c.label} value={i}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl border border-slate-200 space-y-2">
-                <div className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
-                  Import Excel (.xlsx) / CSV Workbook
+              {/* Fast-track bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                <div className="flex flex-wrap items-center gap-2 relative">
+                  <span className="font-semibold text-slate-500">Or fast-track:</span>
+                  <button
+                    type="button"
+                    disabled={existingBinders.length === 0}
+                    onClick={() =>
+                      existingBinders.length === 1
+                        ? startFromClone(existingBinders[0].id)
+                        : setCloneMenuOpen((v) => !v)
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 font-semibold cursor-pointer disabled:opacity-40"
+                    title="Copies courses, colours, duties and bell rows forward; clears lesson notes"
+                  >
+                    <Copy className="w-3.5 h-3.5" /> Clone Previous Year
+                  </button>
+                  {cloneMenuOpen && existingBinders.length > 1 && (
+                    <div className="absolute left-24 top-full mt-1 z-10 w-64 rounded-lg border border-slate-200 bg-white shadow-lg p-1">
+                      {existingBinders.map((b) => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => {
+                            setCloneMenuOpen(false);
+                            startFromClone(b.id);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 font-semibold cursor-pointer"
+                        >
+                          {b.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    ref={xlsxInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleImportXlsx(f);
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => xlsxInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 font-semibold cursor-pointer"
+                    title="Auto-fills Steps 2–5 from a NIST-style Grid + FINAL spreadsheet"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" /> Import .xlsx / CSV
+                  </button>
                 </div>
-                <p className="text-slate-600">
-                  Auto-populates Steps 2–5 from a NIST-style `Grid` + `FINAL` spreadsheet.
-                </p>
-                <input
-                  ref={xlsxInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleImportXlsx(f);
-                    e.target.value = '';
-                  }}
-                />
                 <button
                   type="button"
-                  onClick={() => xlsxInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 font-semibold cursor-pointer"
+                  onClick={confirmStep1}
+                  className="font-semibold text-blue-700 hover:text-blue-900 hover:underline cursor-pointer"
                 >
-                  <Upload className="w-3.5 h-3.5" /> Choose .xlsx / .csv…
+                  Next → Review Dates &amp; Bell Times ({step1Summary})
                 </button>
               </div>
             </div>
@@ -1094,7 +1219,9 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ open, onClos
             {step < 5 ? (
               <button
                 type="button"
-                onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3 | 4 | 5)}
+                onClick={() =>
+                  step === 1 ? confirmStep1() : setStep((s) => (s + 1) as 1 | 2 | 3 | 4 | 5)
+                }
                 className="px-4 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 cursor-pointer"
               >
                 Next →
