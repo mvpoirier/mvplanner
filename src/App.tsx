@@ -13,6 +13,8 @@ import { ExportStudioModal } from './components/ExportStudioModal';
 import { SetupWizardModal } from './components/SetupWizardModal';
 import { SetupDrawer } from './components/SetupDrawer';
 import { GoogleSyncDrawer } from './components/GoogleSyncDrawer';
+import { FileSyncDrawer } from './components/FileSyncDrawer';
+import { useLocalFileSync } from './hooks/useLocalFileSync';
 import type { GoogleAuthSession } from './services/googleAuth';
 import { saveWorkspaceToDrive } from './services/googleDriveSync';
 import type { PlannerWorkspace } from './types/planner';
@@ -57,6 +59,9 @@ export default function App() {
   const [setupOpen, setSetupOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [googleOpen, setGoogleOpen] = useState(false);
+  const [fileSyncOpen, setFileSyncOpen] = useState(false);
+  const fileSync = useLocalFileSync();
+  const fileSyncSaveNow = fileSync.saveNow;
 
   const [activeEdit, setActiveEdit] = useState<ActiveEditTarget | null>(null);
   const [flipDir, setFlipDir] = useState<'next' | 'prev' | null>(null);
@@ -127,10 +132,11 @@ export default function App() {
   const finishEditingCell = useCallback(() => {
     setActiveEdit(null);
     void flushPersist();
+    void fileSyncSaveNow();
     if (googleSession) {
       void syncDriveNow();
     }
-  }, [flushPersist, googleSession, syncDriveNow]);
+  }, [flushPersist, googleSession, syncDriveNow, fileSyncSaveNow]);
 
   const goToWeek = useCallback(
     (targetIdx: number) => {
@@ -317,6 +323,9 @@ export default function App() {
         onOpenSetup={() => setSetupOpen(true)}
         onOpenExport={() => setExportOpen(true)}
         onOpenGoogleSync={() => setGoogleOpen(true)}
+        fileSyncStatus={fileSync.status}
+        fileSyncName={fileSync.fileName}
+        onOpenFileSync={() => setFileSyncOpen(true)}
       />
 
       {/* Full-Screen Desk Stage */}
@@ -418,6 +427,30 @@ export default function App() {
         onClearConflict={() => setConflictRemote(null)}
       />
 
+      {/* Sync file needs attention: visible without opening the side panel */}
+      {!fileSyncOpen && (fileSync.status === 'needs-permission' || fileSync.status === 'conflict' || fileSync.status === 'error') && (
+        <button
+          type="button"
+          onClick={() => {
+            if (fileSync.status === 'needs-permission') void fileSync.reconnect();
+            else setFileSyncOpen(true);
+          }}
+          className={`fixed bottom-14 left-4 z-40 rounded-full px-3.5 py-1.5 text-[11px] font-semibold shadow-md border cursor-pointer ${
+            fileSync.status === 'needs-permission'
+              ? 'bg-blue-700 border-blue-800 text-white hover:bg-blue-800'
+              : 'bg-amber-50 border-amber-400 text-amber-900 hover:bg-amber-100'
+          }`}
+        >
+          {fileSync.status === 'needs-permission'
+            ? `Reconnect ${fileSync.fileName ?? 'sync file'}`
+            : fileSync.status === 'conflict'
+              ? 'Sync file changed elsewhere — choose a copy'
+              : 'Sync file problem — tap to fix'}
+        </button>
+      )}
+
+      <FileSyncDrawer open={fileSyncOpen} onClose={() => setFileSyncOpen(false)} sync={fileSync} />
+
       {/* Subtle Auto-Save Status Pill (fades away cleanly when idle) */}
       {showSaveBadge && (
         <div
@@ -439,7 +472,9 @@ export default function App() {
                   ? 'Saving…'
                   : googleSession && syncStatus === 'saved'
                     ? 'Saved to Drive ✓'
-                    : 'Saved locally ✓'}
+                    : fileSync.status === 'idle'
+                      ? 'Saved to sync file ✓'
+                      : 'Saved locally ✓'}
         </div>
       )}
 
