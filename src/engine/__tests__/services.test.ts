@@ -8,7 +8,6 @@ import { generateIcsContent } from '../../services/exporters/icsExporter';
 import { buildCoursePacingRows, pacingToCsv, pacingToMarkdown } from '../../services/exporters/pacingSheet';
 import { buildPrintSpreadHTML } from '../../services/exporters/printSpread';
 import { generateMarkdownArchive } from '../../services/exporters/archiveExporter';
-import { extractSpreadsheetId } from '../../services/googleSheetsSync';
 import { decryptJSON, encryptJSON, isEncryptedEnvelope } from '../../store/cryptoLock';
 
 describe('Calendar Exception Bulk Importer', () => {
@@ -57,7 +56,7 @@ describe('Calendar Exception Bulk Importer', () => {
   });
 });
 
-describe('Exporters & Google Helpers', () => {
+describe('Exporters', () => {
   const binder = createDemoBinder();
 
   it('generates valid ICS feed, Pacing Sheet, Markdown archive, and A4/Letter duplex print HTML', () => {
@@ -90,17 +89,6 @@ describe('Exporters & Google Helpers', () => {
     });
     expect(htmlLetterBlank).toContain('size: letter portrait');
     expect(htmlLetterBlank).not.toContain('A2 Forces &amp; FBDs');
-  });
-
-  it('extracts Google Spreadsheet IDs from URLs and raw IDs', () => {
-    expect(
-      extractSpreadsheetId(
-        'https://docs.google.com/spreadsheets/d/1DpxXqrQ81Q96eYK9Xq9jZewn5TK9-jZdtPZDVq3Z12g/edit?usp=drivesdk',
-      ),
-    ).toBe('1DpxXqrQ81Q96eYK9Xq9jZewn5TK9-jZdtPZDVq3Z12g');
-    expect(extractSpreadsheetId('1DpxXqrQ81Q96eYK9Xq9jZewn5TK9-jZdtPZDVq3Z12g')).toBe(
-      '1DpxXqrQ81Q96eYK9Xq9jZewn5TK9-jZdtPZDVq3Z12g',
-    );
   });
 
   it('round-trips AES-GCM encrypted JSON envelopes', async () => {

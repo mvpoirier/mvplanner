@@ -3,8 +3,6 @@
 import React from 'react';
 import {
   BookOpen,
-  Cloud,
-  CloudOff,
   Download,
   FolderSync,
   Lock,
@@ -22,7 +20,6 @@ import type {
   ViewMode,
 } from '../types/planner';
 import { formatWeekShortLabel, type ResolvedSchedule } from '../engine/cycleEngine';
-import type { SyncStatus } from '../store/usePlannerStore';
 import type { FileSyncStatus } from '../hooks/useLocalFileSync';
 
 const COVERS: { id: BinderCoverTheme; bg: string; label: string }[] = [
@@ -44,8 +41,6 @@ interface SidePanelProps {
   noteFont: NoteFontMode;
   viewMode: ViewMode;
   isLockedEnabled: boolean;
-  syncStatus: SyncStatus;
-  googleEmail: string | null;
   canUndo: boolean;
   canRedo: boolean;
   onPrevWeek: () => void;
@@ -61,7 +56,6 @@ interface SidePanelProps {
   onOpenWizard: () => void;
   onOpenSetup: () => void;
   onOpenExport: () => void;
-  onOpenGoogleSync: () => void;
   fileSyncStatus: FileSyncStatus;
   fileSyncName: string | null;
   onOpenFileSync: () => void;
@@ -78,8 +72,6 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   noteFont,
   viewMode,
   isLockedEnabled,
-  syncStatus,
-  googleEmail,
   canUndo,
   canRedo,
   onPrevWeek,
@@ -95,22 +87,10 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onOpenWizard,
   onOpenSetup,
   onOpenExport,
-  onOpenGoogleSync,
   fileSyncStatus,
   fileSyncName,
   onOpenFileSync,
 }) => {
-  const syncDot =
-    syncStatus === 'saved'
-      ? 'bg-emerald-500'
-      : syncStatus === 'syncing'
-        ? 'bg-blue-500 animate-pulse'
-        : syncStatus === 'conflict'
-          ? 'bg-amber-500'
-          : syncStatus === 'error'
-            ? 'bg-red-500'
-            : null;
-
   const fileLabel: Record<FileSyncStatus, string> = {
     unsupported: 'Backup file',
     unlinked: 'Set up sync file',
@@ -120,6 +100,17 @@ export const SidePanel: React.FC<SidePanelProps> = ({
     conflict: 'Conflict',
     error: 'Error',
   };
+  // Corner dot on the menu button when the sync file needs attention or is saving
+  const syncDot =
+    fileSyncStatus === 'saving'
+      ? 'bg-blue-500 animate-pulse'
+      : fileSyncStatus === 'needs-permission'
+        ? 'bg-blue-500'
+        : fileSyncStatus === 'conflict'
+          ? 'bg-amber-500'
+          : fileSyncStatus === 'error'
+            ? 'bg-red-500'
+            : null;
   const fileLinked = ['idle', 'saving', 'conflict', 'error'].includes(fileSyncStatus);
   const fileTone =
     fileSyncStatus === 'idle' || fileSyncStatus === 'saving'
@@ -354,33 +345,6 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                 </span>
               </span>
               {fileLinked && <span className="text-[10px] opacity-80">{fileLabel[fileSyncStatus]}</span>}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenGoogleSync();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border font-semibold cursor-pointer transition ${
-                googleEmail
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
-                  : 'border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100'
-              }`}
-            >
-              <span className="flex items-center gap-2 truncate">
-                {syncStatus === 'offline' || syncStatus === 'error' ? (
-                  <CloudOff className="w-3.5 h-3.5 shrink-0" />
-                ) : (
-                  <Cloud className="w-3.5 h-3.5 shrink-0" />
-                )}
-                <span className="truncate">
-                  {googleEmail ? googleEmail : 'Sign in with Google'}
-                </span>
-              </span>
-              {googleEmail && (
-                <span className="text-[10px] capitalize opacity-80">{syncStatus}</span>
-              )}
             </button>
 
             <button
