@@ -15,6 +15,7 @@ import { SetupWizardModal } from './components/SetupWizardModal';
 import { SetupDrawer } from './components/SetupDrawer';
 import { FileSyncDrawer } from './components/FileSyncDrawer';
 import { SearchBox } from './components/SearchBox';
+import { CalendarImportModal } from './components/CalendarImportModal';
 import { SyncStatusChip } from './components/SyncStatusChip';
 import type { SearchHit } from './engine/search';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
@@ -57,6 +58,7 @@ export default function App() {
   const [setupOpen, setSetupOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [fileSyncOpen, setFileSyncOpen] = useState(false);
+  const [calendarImportOpen, setCalendarImportOpen] = useState(false);
   const fileSync = useLocalFileSync();
   const fileSyncSaveNow = fileSync.saveNow;
 
@@ -280,6 +282,7 @@ export default function App() {
         fileSyncStatus={fileSync.status}
         fileSyncName={fileSync.fileName}
         onOpenFileSync={() => setFileSyncOpen(true)}
+        onOpenCalendarImport={() => setCalendarImportOpen(true)}
       />
 
       {/* Full-Screen Desk Stage */}
@@ -406,6 +409,12 @@ export default function App() {
               : 'Sync file problem — tap to fix'}
         </button>
       )}
+
+      <CalendarImportModal
+        open={calendarImportOpen}
+        onClose={() => setCalendarImportOpen(false)}
+        binder={activeBinder}
+      />
 
       <FileSyncDrawer open={fileSyncOpen} onClose={() => setFileSyncOpen(false)} sync={fileSync} />
 
