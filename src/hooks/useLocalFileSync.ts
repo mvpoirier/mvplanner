@@ -22,8 +22,10 @@ import {
   rememberHandle,
   SyncFileLockedError,
   writeSyncFile,
+  pathTarget,
   type SyncFileHandle,
 } from '../services/localFileSync';
+import { findCloudFolders, getDesktopApp, syncPathIn, type CloudFolder, type DesktopApi } from '../platform/desktop';
 
 export type FileSyncStatus =
   | 'unsupported' // browser has no File System Access API
@@ -40,9 +42,19 @@ export interface FileSyncState {
   lastSavedAt: string | null;
   error: string | null;
   conflictFileWorkspace: PlannerWorkspace | null;
+  /** Running as the installed Mac app: sync by folder path, no file picker. */
+  desktopMode: boolean;
+  /** Path of the linked file (Mac app only). */
+  filePath: string | null;
+  cloudFolders: CloudFolder[] | null;
 }
 
 export interface FileSyncControls extends FileSyncState {
+  /** Mac app: list iCloud / OneDrive / Dropbox / Google Drive folders (asks for file access once). */
+  findCloudFolders: () => Promise<void>;
+  /** Mac app: use (or create) MVPlanner/mvplanner-workspace.json inside this folder. */
+  linkFolder: (folder: string) => Promise<void>;
+  revealFile: () => Promise<void>;
   createFile: () => Promise<void>;
   openExistingFile: () => Promise<void>;
   reconnect: () => Promise<void>;
@@ -74,7 +86,11 @@ export function useLocalFileSync(): FileSyncControls {
     lastSavedAt: null,
     error: null,
     conflictFileWorkspace: null,
+    desktopMode: false,
+    filePath: null,
+    cloudFolders: null,
   }));
+  const desktopRef = useRef<DesktopApi | null>(null);
   const patch = useCallback((p: Partial<FileSyncState>) => setState((s) => ({ ...s, ...p })), []);
 
   const handleRef = useRef<SyncFileHandle | null>(null);
@@ -184,20 +200,27 @@ export function useLocalFileSync(): FileSyncControls {
     async (handle: SyncFileHandle) => {
       handleRef.current = handle;
       await rememberHandle(handle);
-      patch({ fileName: handle.name });
+      patch({ fileName: handle.name, filePath: handle.path ?? null });
     },
     [patch],
   );
 
   // On startup (after IndexedDB hydrate & passphrase unlock): reconnect to the remembered file.
   useEffect(() => {
-    if (!hydrated || locked || !isFileSyncSupported()) return;
+    if (!hydrated || locked) return;
     let cancelled = false;
     void (async () => {
+      const desktop = await getDesktopApp();
+      if (cancelled) return;
+      if (desktop) {
+        desktopRef.current = desktop;
+        patch({ desktopMode: true });
+        setState((st) => (st.status === 'unsupported' ? { ...st, status: 'unlinked' } : st));
+      }
       const handle = await loadRememberedHandle();
       if (!handle || cancelled) return;
       handleRef.current = handle;
-      patch({ fileName: handle.name });
+      patch({ fileName: handle.name, filePath: handle.path ?? null });
       try {
         const perm = await checkPermission(handle);
         if (cancelled) return;
@@ -317,12 +340,69 @@ export function useLocalFileSync(): FileSyncControls {
     }
   }, [fail, patch, reconcile]);
 
+  const findFolders = useCallback(async () => {
+    const d = desktopRef.current;
+    if (!d) return;
+    try {
+      const perm = (await d.permissions?.request(['full-access']))?.['full-access'];
+      if (perm !== 'granted') {
+        patch({ error: 'MVPlanner needs file access to find your cloud folders. Allow it when asked.' });
+        return;
+      }
+      patch({ cloudFolders: await findCloudFolders(d), error: null });
+    } catch (err) {
+      fail(err);
+    }
+  }, [fail, patch]);
+
+  const linkFolder = useCallback(
+    async (folder: string) => {
+      const d = desktopRef.current;
+      if (!d) return;
+      try {
+        const target = pathTarget(d, syncPathIn(folder));
+        if (!(await askPermission(target))) {
+          patch({ status: 'needs-permission', error: 'File access was not allowed.' });
+          return;
+        }
+        const snap = await readSyncFile(target, passphrase());
+        await adoptHandle(target);
+        knownModifiedRef.current = snap.lastModified;
+        activeRef.current = true;
+        if (snap.workspace) {
+          // A file is already there (e.g. saved from another computer): use what's in it.
+          applyFileWorkspace(snap.workspace);
+          patch({ status: 'idle', error: null, conflictFileWorkspace: null });
+          usePlannerStore.getState().showToast('Found your sync file there and loaded it.');
+        } else {
+          await writeNow();
+          usePlannerStore.getState().showToast('Sync file created — changes now save there automatically.');
+        }
+      } catch (err) {
+        fail(err);
+      }
+    },
+    [adoptHandle, applyFileWorkspace, fail, patch, writeNow],
+  );
+
+  const revealFile = useCallback(async () => {
+    const path = handleRef.current?.path;
+    if (path) await desktopRef.current?.shell?.showItemInFolder(path).catch(() => undefined);
+  }, []);
+
   const unlink = useCallback(async () => {
     activeRef.current = false;
     handleRef.current = null;
     knownModifiedRef.current = null;
     await forgetHandle();
-    patch({ status: 'unlinked', fileName: null, error: null, conflictFileWorkspace: null, lastSavedAt: null });
+    patch({
+      status: desktopRef.current || isFileSyncSupported() ? 'unlinked' : 'unsupported',
+      fileName: null,
+      filePath: null,
+      error: null,
+      conflictFileWorkspace: null,
+      lastSavedAt: null,
+    });
   }, [patch]);
 
   const resolveConflict = useCallback(
@@ -342,5 +422,16 @@ export function useLocalFileSync(): FileSyncControls {
     [applyFileWorkspace, fail, patch, state.conflictFileWorkspace, writeNow],
   );
 
-  return { ...state, createFile, openExistingFile, reconnect, unlink, saveNow, resolveConflict };
+  return {
+    ...state,
+    createFile,
+    openExistingFile,
+    reconnect,
+    unlink,
+    saveNow,
+    resolveConflict,
+    findCloudFolders: findFolders,
+    linkFolder,
+    revealFile,
+  };
 }
