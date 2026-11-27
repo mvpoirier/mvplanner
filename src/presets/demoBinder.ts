@@ -55,7 +55,7 @@ export function createDemoBinder(): AcademicYearBinder {
       { id: 'dn5', text: 'Try clicking any cell + "Bump Forward" to see Smart Bump in action!', ink: 'pencil' },
     ],
     '2026-12-14': [
-      { id: 'dn6', text: 'Winter Break Dec 21–Jan 8 (3 non-teaching weeks skipped → Jan 11 is Week 18 / 20 remaining)', ink: 'blue' },
+      { id: 'dn6', text: 'Winter Break Dec 21–Jan 8 (3 non-teaching weeks skipped → Jan 11 is Week 18 of 38)', ink: 'blue' },
       { id: 'dn7', text: 'Fri 18-Dec Early Dismissal 11:30 — IA Final Submission DUE', ink: 'red', sourceCellKey: cellKey('2026-12-18', 'P2') },
     ],
   };

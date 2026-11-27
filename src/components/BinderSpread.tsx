@@ -40,6 +40,10 @@ interface BinderSpreadProps {
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onJumpWeek: (weekIdx: number) => void;
+  onJumpToday: () => void;
+  todayIso: string;
+  searchSlot?: React.ReactNode;
+  statusSlot?: React.ReactNode;
 }
 
 export const BinderSpread: React.FC<BinderSpreadProps> = ({
@@ -59,7 +63,18 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   onPrevWeek,
   onNextWeek,
   onJumpWeek,
+  onJumpToday,
+  todayIso,
+  searchSlot,
+  statusSlot,
 }) => {
+  const todayOnSpread = week.days.some((d) => d.iso === todayIso);
+  const totalTeaching = schedule.summary.totalTeachingWeeks;
+  const progressPct =
+    week.isTeachingWeek && week.teachingWeekNumber && totalTeaching
+      ? Math.round((week.teachingWeekNumber / totalTeaching) * 100)
+      : null;
+
   const monthTabs: { label: string; weekIndex: number; color: { bg: string; text: string } }[] = [];
   const seenMonths = new Set<string>();
   schedule.weeks.forEach((w, idx) => {
@@ -132,14 +147,25 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
           {canPrev && <div className="corner-hint corner-hint-prev">‹ Prev Week</div>}
 
           <div className="page-meta-bar">
-            <span className="font-bold text-slate-800 tracking-tight">
-              {formatWeekHeading(week)}
+            <span className="flex items-center gap-2.5 min-w-0">
+              <span className="font-bold text-slate-800 tracking-tight whitespace-nowrap">
+                {formatWeekHeading(week)}
+              </span>
+              {progressPct !== null && (
+                <span
+                  className="week-progress"
+                  role="progressbar"
+                  aria-label="Teaching weeks completed"
+                  aria-valuenow={progressPct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <span style={{ width: `${progressPct}%` }} />
+                </span>
+              )}
+              {binder.archived && <span className="text-[10px] text-slate-500">Archived · Read-Only</span>}
             </span>
-            <span className="text-[10px] text-slate-500">
-              {binder.archived
-                ? 'Archived · Read-Only'
-                : 'Double-click any cell to edit · Click corner to flip'}
-            </span>
+            {searchSlot}
           </div>
           <div className="table-fit">
             <TimetableTable
@@ -169,11 +195,20 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
           />
           {canNext && <div className="corner-hint corner-hint-next">Next Week ›</div>}
 
+          {!todayOnSpread && (
+            <button
+              type="button"
+              className="today-ribbon-peek"
+              onClick={onJumpToday}
+              title="Go to today's week (T)"
+            >
+              Today
+            </button>
+          )}
+
           <div className="page-meta-bar">
             <span className="text-[10.5px] font-semibold text-slate-600">{week.dateRange}</span>
-            <span className="text-[10px] text-slate-500">
-              {schedule.summary.totalTeachingWeeks} Teaching Weeks Total
-            </span>
+            {statusSlot}
           </div>
           <div className="right-page-grid">
             <div className="table-fit">

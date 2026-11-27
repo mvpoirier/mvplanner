@@ -208,14 +208,14 @@ export function resolveSchedule(binder: AcademicYearBinder): ResolvedSchedule {
 
 export function formatWeekHeading(week: ResolvedWeek): string {
   if (week.isTeachingWeek && week.teachingWeekNumber !== null) {
-    return `Week ${week.teachingWeekNumber} / ${week.teachingWeeksRemaining} remaining`;
+    return `Week ${week.teachingWeekNumber} of ${week.teachingWeekNumber + week.teachingWeeksRemaining}`;
   }
   return `Non-Teaching Week · ${week.nonTeachingLabel ?? 'Break'}`;
 }
 
 export function formatWeekShortLabel(week: ResolvedWeek): string {
   if (week.isTeachingWeek && week.teachingWeekNumber !== null) {
-    return `Week ${week.teachingWeekNumber} / ${week.teachingWeeksRemaining} left · ${week.dateRange}`;
+    return `Week ${week.teachingWeekNumber} of ${week.teachingWeekNumber + week.teachingWeeksRemaining} · ${week.dateRange}`;
   }
   return `Break · ${week.nonTeachingLabel ?? 'Non-Teaching'} · ${week.dateRange}`;
 }

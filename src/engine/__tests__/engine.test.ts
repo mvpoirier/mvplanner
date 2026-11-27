@@ -27,27 +27,27 @@ describe('NIST 2026–2027 Schedule Verification', () => {
     const a1 = schedule.daysByIso['2026-08-19'];
     expect(a1.occurrenceTag).toBe('A1');
     const wk1 = schedule.weeks.find((w) => w.mondayIso === '2026-08-17')!;
-    expect(formatWeekHeading(wk1)).toBe('Week 1 / 37 remaining');
+    expect(formatWeekHeading(wk1)).toBe('Week 1 of 38');
 
     const wk9 = schedule.weeks.find((w) => w.mondayIso === '2026-10-19')!;
-    expect(formatWeekHeading(wk9)).toBe('Week 9 / 29 remaining');
+    expect(formatWeekHeading(wk9)).toBe('Week 9 of 38');
     expect(schedule.daysByIso['2026-10-23'].isInstructional).toBe(false);
     expect(schedule.daysByIso['2026-10-23'].classification.pause?.title).toContain('RAMA V');
 
     const wk17 = schedule.weeks.find((w) => w.mondayIso === '2026-12-14')!;
-    expect(formatWeekHeading(wk17)).toBe('Week 17 / 21 remaining');
+    expect(formatWeekHeading(wk17)).toBe('Week 17 of 38');
     expect(schedule.daysByIso['2026-12-18'].occurrenceTag).toBe('I8');
     expect(schedule.daysByIso['2026-12-18'].classification.bellLabel).toBe('Early Dismissal 11:30');
 
     const j8 = schedule.daysByIso['2027-01-11'];
     expect(j8.occurrenceTag).toBe('J8');
     const wk18 = schedule.weeks.find((w) => w.mondayIso === '2027-01-11')!;
-    expect(formatWeekHeading(wk18)).toBe('Week 18 / 20 remaining');
+    expect(formatWeekHeading(wk18)).toBe('Week 18 of 38');
 
     const h18 = schedule.daysByIso['2027-06-18'];
     expect(h18.occurrenceTag).toBe('H18');
     const wk38 = schedule.weeks.find((w) => w.mondayIso === '2027-06-14')!;
-    expect(formatWeekHeading(wk38)).toBe('Week 38 / 0 remaining');
+    expect(formatWeekHeading(wk38)).toBe('Week 38 of 38');
   });
 
   it('applies recurring AM/ECA rules and skips holidays', () => {

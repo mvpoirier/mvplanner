@@ -14,6 +14,9 @@ import { ExportStudioModal } from './components/ExportStudioModal';
 import { SetupWizardModal } from './components/SetupWizardModal';
 import { SetupDrawer } from './components/SetupDrawer';
 import { FileSyncDrawer } from './components/FileSyncDrawer';
+import { SearchBox } from './components/SearchBox';
+import { SyncStatusChip } from './components/SyncStatusChip';
+import type { SearchHit } from './engine/search';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
 import type { PlannerWorkspace } from './types/planner';
 
@@ -100,6 +103,18 @@ export default function App() {
     goToWeek(pos.weekIndex);
     setPhoneDayIndex(pos.dayIndex);
   }, [schedule, goToWeek, setPhoneDayIndex]);
+
+  const openSearchHit = useCallback(
+    (hit: SearchHit) => {
+      goToWeek(hit.weekIndex);
+      if (hit.dayIso && hit.periodId) setSelectedCell({ date: hit.dayIso, periodId: hit.periodId });
+      if (hit.dayIso) {
+        const di = schedule.weeks[hit.weekIndex]?.days.findIndex((d) => d.iso === hit.dayIso) ?? -1;
+        if (di >= 0) setPhoneDayIndex(di);
+      }
+    },
+    [goToWeek, schedule, setSelectedCell, setPhoneDayIndex],
+  );
 
   // Close inline editor & auto-save immediately when clicking outside
   useEffect(() => {
@@ -289,6 +304,20 @@ export default function App() {
             onPrevWeek={() => goToWeek(safeWeekIdx - 1)}
             onNextWeek={() => goToWeek(safeWeekIdx + 1)}
             onJumpWeek={goToWeek}
+            onJumpToday={goToToday}
+            todayIso={todayISO()}
+            searchSlot={<SearchBox binder={activeBinder} schedule={schedule} onPick={openSearchHit} />}
+            statusSlot={
+              <SyncStatusChip
+                status={fileSync.status}
+                fileName={fileSync.fileName}
+                localSaving={localSaveStatus === 'saving'}
+                onClick={() => {
+                  if (fileSync.status === 'needs-permission') void fileSync.reconnect();
+                  else setFileSyncOpen(true);
+                }}
+              />
+            }
           />
         )}
 
