@@ -16,6 +16,7 @@ import { SetupDrawer } from './components/SetupDrawer';
 import { FileSyncDrawer } from './components/FileSyncDrawer';
 import { SearchBox } from './components/SearchBox';
 import { CalendarImportModal } from './components/CalendarImportModal';
+import { RemindersDrawer } from './components/RemindersDrawer';
 import { SyncStatusChip } from './components/SyncStatusChip';
 import type { SearchHit } from './engine/search';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
@@ -60,6 +61,7 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [fileSyncOpen, setFileSyncOpen] = useState(false);
   const [calendarImportOpen, setCalendarImportOpen] = useState(false);
+  const [remindersOpen, setRemindersOpen] = useState(false);
   const fileSync = useLocalFileSync();
   const fileSyncSaveNow = fileSync.saveNow;
 
@@ -286,6 +288,7 @@ export default function App() {
         onOpenFileSync={() => setFileSyncOpen(true)}
         onOpenCalendarImport={() => setCalendarImportOpen(true)}
         desktopApp={desktopApp}
+        onOpenReminders={() => setRemindersOpen(true)}
       />
 
       {/* Full-Screen Desk Stage */}
@@ -317,6 +320,8 @@ export default function App() {
               <SyncStatusChip
                 status={fileSync.status}
                 fileName={fileSync.fileName}
+                filePath={fileSync.filePath}
+                lastSavedAt={fileSync.lastSavedAt}
                 localSaving={localSaveStatus === 'saving'}
                 onClick={() => {
                   if (fileSync.status === 'needs-permission') void fileSync.reconnect();
@@ -413,6 +418,14 @@ export default function App() {
         </button>
       )}
 
+      <RemindersDrawer
+        open={remindersOpen}
+        onClose={() => setRemindersOpen(false)}
+        binder={activeBinder}
+        schedule={schedule}
+        desktopApp={desktopApp}
+      />
+
       <CalendarImportModal
         open={calendarImportOpen}
         onClose={() => setCalendarImportOpen(false)}
@@ -422,7 +435,7 @@ export default function App() {
       <FileSyncDrawer open={fileSyncOpen} onClose={() => setFileSyncOpen(false)} sync={fileSync} />
 
       {/* Subtle Auto-Save Status Pill (fades away cleanly when idle) */}
-      {showSaveBadge && (
+      {showSaveBadge && viewMode !== 'binder' && (
         <div className="fixed bottom-4 left-4 z-40 rounded-full px-3 py-1 text-[11px] font-semibold shadow-md border backdrop-blur transition-opacity bg-white/90 border-slate-200 text-slate-700">
           {localSaveStatus === 'saving'
             ? 'Saving…'

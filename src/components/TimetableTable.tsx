@@ -11,6 +11,7 @@ import {
 } from '../types/planner';
 import { resolveSlot, type ResolvedWeek } from '../engine/cycleEngine';
 import { todayISO } from '../engine/dateUtils';
+import { toggleReminderSkip, useReminderPrefs } from '../store/reminderPrefs';
 import { usePlannerStore, type SelectedCell } from '../store/usePlannerStore';
 
 function getRowWeight(period: PeriodRow): number {
@@ -58,6 +59,12 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
   }, [editingCell?.date, editingCell?.periodId]);
 
   const today = todayISO();
+  const lastPeriodId = binder.periods[binder.periods.length - 1]?.id;
+  const reminderSkips = useReminderPrefs().skips;
+  const showToast = usePlannerStore((st) => st.showToast);
+  /** Outline today's whole column (screen only). */
+  const todayCol = (iso: string, periodId?: string) =>
+    iso === today ? ` today-col${periodId === lastPeriodId ? ' today-col-last' : ''}` : '';
   const dayPct = Math.floor(81 / dayIndices.length);
   const totalWeight = binder.periods.reduce((acc, p) => acc + getRowWeight(p), 0) || 1;
   // Reserve ~11.5% for the 3 header rows; distribute remaining ~88.5% proportionally across periods
@@ -80,8 +87,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
           {dayIndices.map((di) => {
             const d = week.days[di];
             return (
-              <th key={d.iso} className={`tt-hdr-top${d.iso === today ? ' is-today' : ''}`}>
-                {d.iso === today && <span className="today-ribbon" title="Today" aria-hidden="true" />}
+              <th key={d.iso} className={`tt-hdr-top${d.iso === today ? ' is-today today-col today-col-first' : ''}`}>
                 {d.dow}
                 {d.classification.bellLabel && (
                   <span
@@ -103,7 +109,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
           {dayIndices.map((di) => (
             <th
               key={week.days[di].iso}
-              className={`tt-hdr-date${week.days[di].iso === today ? ' is-today' : ''}`}
+              className={`tt-hdr-date${week.days[di].iso === today ? ' is-today today-col' : ''}`}
             >
               {week.days[di].shortDate}
             </th>
@@ -117,7 +123,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
           {dayIndices.map((di) => {
             const d = week.days[di];
             return (
-              <th key={d.iso} className={`tt-hdr-day${d.iso === today ? ' is-today' : ''}`}>
+              <th key={d.iso} className={`tt-hdr-day${d.iso === today ? ' is-today today-col' : ''}`}>
                 {d.cycleLetter ? (
                   <>
                     {d.cycleLetter}{' '}
@@ -143,10 +149,11 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                 {dayIndices.map((di) => {
                   const d = week.days[di];
                   const slot = resolveSlot(binder, d, period);
-                  if (!slot.course) return <td key={d.iso} />;
+                  if (!slot.course) return <td key={d.iso} className={todayCol(d.iso, period.id)} />;
                   return (
                     <td
                       key={d.iso}
+                      className={todayCol(d.iso, period.id)}
                       style={{
                         backgroundColor: slot.course.color,
                         color: slot.course.textColor ?? '#1e2022',
@@ -219,9 +226,19 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                     key={day.iso}
                     className={`tt-slot ${extraClass} ${isSelected ? 'selected' : ''} ${
                       isEditing ? 'editing' : ''
-                    }`}
+                    }${todayCol(day.iso, period.id)}${reminderSkips.includes(cellKey(day.iso, period.id)) ? ' no-reminder' : ''}`}
                     style={bgStyle}
                     onClick={() => onSelectCell(day.iso, period.id)}
+                    onContextMenu={(e) => {
+                      if (slot.exceptionKind === 'full' || (!slot.course && period.kind !== 'period' && slot.banners.length === 0)) return;
+                      e.preventDefault();
+                      const nowSkipped = toggleReminderSkip(cellKey(day.iso, period.id));
+                      showToast(
+                        nowSkipped
+                          ? `No reminder for ${period.label} on ${day.dow} ${day.shortDate}.`
+                          : `Reminder back on for ${period.label} on ${day.dow} ${day.shortDate}.`,
+                      );
+                    }}
                     onDoubleClick={(e) => {
                       if (!canEdit) return;
                       e.stopPropagation();

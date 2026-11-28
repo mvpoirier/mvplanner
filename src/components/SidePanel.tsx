@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   CalendarPlus,
   Laptop,
+  Bell,
   Sparkles,
   Undo2,
   X,
@@ -24,6 +25,7 @@ import type {
 import { formatWeekShortLabel, type ResolvedSchedule } from '../engine/cycleEngine';
 import type { FileSyncStatus } from '../hooks/useLocalFileSync';
 import type { DesktopAppControls } from '../hooks/useDesktopApp';
+import { useReminderPrefs } from '../store/reminderPrefs';
 
 const COVERS: { id: BinderCoverTheme; bg: string; label: string }[] = [
   { id: 'nist-blue', bg: '#1e4b94', label: 'NIST Blue' },
@@ -64,6 +66,7 @@ interface SidePanelProps {
   fileSyncName: string | null;
   onOpenFileSync: () => void;
   desktopApp: DesktopAppControls;
+  onOpenReminders: () => void;
 }
 
 export const SidePanel: React.FC<SidePanelProps> = ({
@@ -97,7 +100,9 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   fileSyncName,
   onOpenFileSync,
   desktopApp,
+  onOpenReminders,
 }) => {
+  const reminders = useReminderPrefs();
   const fileLabel: Record<FileSyncStatus, string> = {
     unsupported: 'Backup file',
     unlinked: 'Set up sync file',
@@ -401,30 +406,32 @@ export const SidePanel: React.FC<SidePanelProps> = ({
               </button>
             )}
 
-            {desktopApp.isApp && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 space-y-1.5">
-                <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Mac app</div>
-                <label className="flex items-center justify-between gap-2 cursor-pointer">
-                  <span className="text-slate-800">Next lesson in the menu bar</span>
-                  <input
-                    type="checkbox"
-                    checked={desktopApp.menuBar}
-                    onChange={(e) => void desktopApp.setMenuBar(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-blue-800"
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-2 cursor-pointer">
-                  <span className="text-slate-800">Remind me 5 min before lessons</span>
-                  <input
-                    type="checkbox"
-                    checked={desktopApp.reminders}
-                    onChange={(e) => void desktopApp.setReminders(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-blue-800"
-                  />
-                </label>
-                {desktopApp.problem && <p className="text-[10.5px] text-amber-800">{desktopApp.problem}</p>}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenReminders();
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-800 cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Bell className="w-3.5 h-3.5 text-slate-600" />
+                Reminders
+              </span>
+              <span
+                className={`text-[10px] ${
+                  reminders.enabled && desktopApp.notifyAccess !== 'granted' ? 'text-amber-700' : 'text-slate-500'
+                }`}
+              >
+                {!reminders.enabled
+                  ? 'Off'
+                  : desktopApp.notifyAccess !== 'granted'
+                    ? 'Allow notifications'
+                    : reminders.leadMin === 0
+                      ? 'On · at start'
+                      : `On · ${reminders.leadMin} min before`}
+              </span>
+            </button>
 
             <button
               type="button"

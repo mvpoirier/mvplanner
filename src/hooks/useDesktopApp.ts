@@ -5,24 +5,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AcademicYearBinder } from '../types/planner';
 import type { ResolvedSchedule } from '../engine/cycleEngine';
-import { agendaFor, menuBarText } from '../engine/todayAgenda';
+import { agendaFor, dueReminders, menuBarText, reminderText } from '../engine/todayAgenda';
+import { getReminderPrefs, useReminderPrefs } from '../store/reminderPrefs';
 import { todayISO } from '../engine/dateUtils';
-import { getDesktop, type DesktopApi, type DesktopPermission } from '../platform/desktop';
+import { getDesktop, type DesktopApi } from '../platform/desktop';
 
-const PREFS_KEY = 'mvplanner-desktop-prefs';
-const REMIND_MIN = 5;
-
-interface Prefs {
-  menuBar: boolean;
-  reminders: boolean;
-}
-const loadPrefs = (): Prefs => {
-  try {
-    return { menuBar: false, reminders: false, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
-  } catch {
-    return { menuBar: false, reminders: false };
-  }
-};
+export type NotifyAccess = 'granted' | 'prompt' | 'denied' | 'unsupported';
 
 /** 256 px app icon: navy binder cover, white page, two silver rings, "MV". */
 function drawIcon(): string {
@@ -62,21 +50,42 @@ export interface DesktopAppControls {
   /** 'available' → show an "Install as Mac app" button. */
   installState: 'available' | 'installed' | 'unavailable';
   install: () => Promise<void>;
-  menuBar: boolean;
-  reminders: boolean;
-  setMenuBar: (on: boolean) => Promise<void>;
-  setReminders: (on: boolean) => Promise<void>;
+  /** Can reminders reach the screen? (Mac notifications, or the browser's) */
+  notifyAccess: NotifyAccess;
+  /** From a click: ask for notification (and, in the Mac app, menu bar) access. */
+  allowNotifications: () => Promise<void>;
+  menuBarAccess: NotifyAccess;
+  sendTestReminder: () => Promise<void>;
   problem: string | null;
 }
+
+const browserNotifyAccess = (): NotifyAccess => {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  return Notification.permission === 'granted' ? 'granted' : Notification.permission === 'denied' ? 'denied' : 'prompt';
+};
+const fromDesktop = (st: string | undefined): NotifyAccess =>
+  st === 'granted' ? 'granted' : st === 'prompt' ? 'prompt' : st === 'denied' ? 'denied' : 'unsupported';
 
 export function useDesktopApp(binder: AcademicYearBinder, schedule: ResolvedSchedule): DesktopAppControls {
   const [desktop, setDesktop] = useState<DesktopApi | null>(null);
   const [installState, setInstallState] = useState<DesktopAppControls['installState']>('unavailable');
-  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  const [notifyAccess, setNotifyAccess] = useState<NotifyAccess>(browserNotifyAccess);
+  const [menuBarAccess, setMenuBarAccess] = useState<NotifyAccess>('unsupported');
   const [problem, setProblem] = useState<string | null>(null);
-  const notified = useRef(new Set<string>());
+  const prefs = useReminderPrefs();
+  const sent = useRef(new Set<string>());
   const dataRef = useRef({ binder, schedule });
   dataRef.current = { binder, schedule };
+  const isApp = !!desktop?.fs;
+
+  const refreshAccess = useCallback(async (d: DesktopApi | null) => {
+    if (d?.fs && d.permissions) {
+      setNotifyAccess(fromDesktop(await d.permissions.state('notifications').catch(() => undefined)));
+      setMenuBarAccess(fromDesktop(await d.permissions.state('menu-bar').catch(() => undefined)));
+    } else {
+      setNotifyAccess(browserNotifyAccess());
+    }
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -85,79 +94,77 @@ export function useDesktopApp(binder: AcademicYearBinder, schedule: ResolvedSche
       setDesktop(d);
       setInstallState(await d.install.state().catch(() => 'unavailable' as const));
       if (d.fs) d.app?.dock.setIcon(drawIcon()).catch(() => undefined);
+      await refreshAccess(d);
     });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [refreshAccess]);
 
-  const isApp = !!desktop?.fs;
-
-  const savePrefs = (p: Prefs) => {
-    setPrefs(p);
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-    } catch {
-      /* storage unavailable */
-    }
-  };
-
-  /** Ask for a permission from a click; false (with a message) if refused. */
-  const ensure = useCallback(
-    async (name: DesktopPermission, what: string) => {
-      if (!desktop?.permissions) return false;
-      const st = (await desktop.permissions.request([name]).catch(() => null))?.[name];
-      if (st === 'granted') return true;
-      setProblem(
-        st === 'denied'
-          ? `${what} was turned off for MVPlanner. Turn it on in the app's Permissions (MVPlanner menu).`
-          : `${what} isn't available on this Mac.`,
-      );
-      return false;
+  const show = useCallback(
+    async (body: string) => {
+      if (desktop?.fs) {
+        await desktop.notification?.show({ body });
+      } else if (browserNotifyAccess() === 'granted') {
+        new Notification('MVPlanner', { body, tag: body });
+      }
     },
     [desktop],
   );
 
-  const setMenuBar = useCallback(
-    async (on: boolean) => {
-      setProblem(null);
-      if (on && !(await ensure('menu-bar', 'The menu bar item'))) return;
-      if (!on) await desktop?.tray?.remove().catch(() => undefined);
-      savePrefs({ ...prefs, menuBar: on });
-    },
-    [desktop, ensure, prefs],
-  );
+  const allowNotifications = useCallback(async () => {
+    setProblem(null);
+    if (desktop?.fs && desktop.permissions) {
+      const res = await desktop.permissions.request(['notifications', 'menu-bar']).catch(() => null);
+      if (res?.notifications === 'denied' || res?.['menu-bar'] === 'denied') {
+        setProblem("Turned off for MVPlanner. Turn them back on in the app's Permissions (MVPlanner menu).");
+      }
+    } else if (typeof Notification !== 'undefined') {
+      const res = await Notification.requestPermission();
+      if (res === 'denied') setProblem("Your browser is blocking notifications for this site. Allow them in the site's settings.");
+    }
+    await refreshAccess(desktop);
+  }, [desktop, refreshAccess]);
 
-  const setReminders = useCallback(
-    async (on: boolean) => {
-      setProblem(null);
-      if (on && !(await ensure('notifications', 'Notifications'))) return;
-      savePrefs({ ...prefs, reminders: on });
-    },
-    [ensure, prefs],
-  );
+  const sendTestReminder = useCallback(async () => {
+    const { binder: b, schedule: s } = dataRef.current;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const next = agendaFor(b, s, todayISO()).find((i) => i.startMin > nowMin);
+    await show(
+      next ? `Test · ${reminderText(next, nowMin, getReminderPrefs().includeNote)}` : 'Test · Reminders are working.',
+    ).catch(() => setProblem("Couldn't show a notification."));
+  }, [show]);
 
-  // Every 30 s: refresh the menu bar item and send any lesson reminder that is due.
+  // Every 30 s: refresh the menu bar item and send any reminder that is due.
   useEffect(() => {
-    if (!isApp || (!prefs.menuBar && !prefs.reminders)) return;
+    const wantsNotify = prefs.enabled && notifyAccess === 'granted';
+    const wantsMenuBar = isApp && prefs.menuBar && menuBarAccess === 'granted';
+    if (!wantsNotify && !wantsMenuBar) {
+      if (isApp) desktop?.tray?.remove().catch(() => undefined);
+      return;
+    }
     const tick = async () => {
       const { binder: b, schedule: s } = dataRef.current;
       const today = todayISO();
       const items = agendaFor(b, s, today);
       const now = new Date();
       const nowMin = now.getHours() * 60 + now.getMinutes();
+      const p = getReminderPrefs();
 
-      if (prefs.menuBar && (await desktop!.permissions?.state('menu-bar')) === 'granted') {
+      if (wantsMenuBar) {
         await desktop!.tray
           ?.set({
             title: menuBarText(items, nowMin),
             toolTip: 'Today in MVPlanner',
             menu: [
               ...(items.length
-                ? items.map((i) => ({
-                    label: `${i.start}  ${i.periodLabel}  ${i.title}${i.note ? ` — ${i.note.slice(0, 40)}` : ''}`,
-                    enabled: false,
-                  }))
+                ? items
+                    .filter((i) => i.kind !== 'free')
+                    .map((i) => ({
+                      label: `${i.start}  ${i.periodLabel}  ${i.title}${i.note ? ` — ${i.note.slice(0, 40)}` : ''}`,
+                      enabled: false,
+                    }))
                 : [{ label: 'No lessons today', enabled: false }]),
               { type: 'separator' as const },
               { label: 'Open MVPlanner', click: () => void desktop!.window?.show() },
@@ -166,23 +173,17 @@ export function useDesktopApp(binder: AcademicYearBinder, schedule: ResolvedSche
           .catch(() => undefined);
       }
 
-      if (prefs.reminders && (await desktop!.permissions?.state('notifications')) === 'granted') {
-        for (const i of items) {
-          const key = `${today}-${i.periodLabel}`;
-          const due = i.startMin - REMIND_MIN;
-          if (nowMin >= due && nowMin < i.startMin && !notified.current.has(key)) {
-            notified.current.add(key);
-            await desktop!.notification
-              ?.show({ body: `In ${i.startMin - nowMin} min · ${i.periodLabel} ${i.title}${i.note ? ` — ${i.note}` : ''}`.slice(0, 300) })
-              .catch(() => undefined);
-          }
+      if (wantsNotify && p.pausedOn !== today) {
+        for (const i of dueReminders(items, nowMin, p, sent.current)) {
+          sent.current.add(i.cellKey);
+          await show(reminderText(i, nowMin, p.includeNote)).catch(() => undefined);
         }
       }
     };
     void tick();
     const t = setInterval(() => void tick(), 30_000);
     return () => clearInterval(t);
-  }, [desktop, isApp, prefs]);
+  }, [desktop, isApp, prefs.enabled, prefs.menuBar, notifyAccess, menuBarAccess, show]);
 
   const install = useCallback(async () => {
     if (!desktop) return;
@@ -194,10 +195,11 @@ export function useDesktopApp(binder: AcademicYearBinder, schedule: ResolvedSche
     isApp,
     installState,
     install,
-    menuBar: prefs.menuBar,
-    reminders: prefs.reminders,
-    setMenuBar,
-    setReminders,
+    notifyAccess,
+    allowNotifications,
+    menuBarAccess,
+    sendTestReminder,
     problem,
   };
 }
+

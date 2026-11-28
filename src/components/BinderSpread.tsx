@@ -3,7 +3,7 @@
 
 import React from 'react';
 import type { AcademicYearBinder, BinderCoverTheme } from '../types/planner';
-import { formatWeekHeading, type ResolvedSchedule, type ResolvedWeek } from '../engine/cycleEngine';
+import { locateToday, formatWeekHeading, type ResolvedSchedule, type ResolvedWeek } from '../engine/cycleEngine';
 import type { SelectedCell } from '../store/usePlannerStore';
 import { TimetableTable, WeeklyNotesPanel } from './TimetableTable';
 import { monthLabel } from '../engine/dateUtils';
@@ -68,7 +68,16 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   searchSlot,
   statusSlot,
 }) => {
-  const todayOnSpread = week.days.some((d) => d.iso === todayIso);
+  const todayTip = (() => {
+    const pos = locateToday(schedule, todayIso);
+    const w = schedule.weeks[pos.weekIndex];
+    const d = w?.days.find((x) => x.iso === todayIso);
+    const wk = w?.teachingWeekNumber ? ` (Week ${w.teachingWeekNumber})` : '';
+    if (!w) return 'Go to today';
+    return d
+      ? `Go to today · ${d.dow} ${d.shortDate.replace('-', ' ')}${wk}`
+      : `Go to this week · ${w.dateRange}${wk}`;
+  })();
   const totalTeaching = schedule.summary.totalTeachingWeeks;
   const progressPct =
     week.isTeachingWeek && week.teachingWeekNumber && totalTeaching
@@ -195,20 +204,19 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
           />
           {canNext && <div className="corner-hint corner-hint-next">Next Week ›</div>}
 
-          {!todayOnSpread && (
-            <button
-              type="button"
-              className="today-ribbon-peek"
-              onClick={onJumpToday}
-              title="Go to today's week (T)"
-            >
-              Today
-            </button>
-          )}
+          {/* Today ribbon: top-right corner, no text; tooltip says where it goes */}
+          <button type="button" className="today-ribbon-btn" onClick={onJumpToday} aria-label={todayTip}>
+            <span className="today-ribbon-shape" aria-hidden="true" />
+            <span className="binder-tip binder-tip-left" role="tooltip">
+              {todayTip} <kbd>T</kbd>
+            </span>
+          </button>
+
+          {/* Sync status: bottom-right of the planner */}
+          {statusSlot && <div className="binder-status-slot">{statusSlot}</div>}
 
           <div className="page-meta-bar">
             <span className="text-[10.5px] font-semibold text-slate-600">{week.dateRange}</span>
-            {statusSlot}
           </div>
           <div className="right-page-grid">
             <div className="table-fit">
