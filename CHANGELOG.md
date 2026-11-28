@@ -8,6 +8,11 @@ All notable changes to MVPlanner. Versions follow [semantic versioning](https://
 - Unsigned **macOS app (.dmg)** and **Android app (.apk)** built from this codebase, downloadable from GitHub Releases. No app stores.
 - **Google Drive sync** (optional) using the narrow `drive.file` / `drive.appdata` scopes, alongside the sync file.
 
+## [Unreleased]
+### Added
+- **Binding** choice in ☰ → Binding: **Notebook** (stitched seam, no rings), **2-ring** (default) or **3-ring**.
+- GitHub Releases are published automatically when the version in `package.json` changes.
+
 ## [1.4.0] — 2026-11-28
 ### Added
 - New lesson editor toolbar: **Ink ▾** (black, blue, red), **Style ▾** (bold, italic, strikethrough, yellow highlight, circle first line, star), **List ▾** (bulleted, numbered), **Link**, **Unit ▾**, **Bump ▾**.

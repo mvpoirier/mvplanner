@@ -4,7 +4,7 @@
 import React from 'react';
 import type { AcademicYearBinder, BinderCoverTheme } from '../types/planner';
 import { locateToday, formatWeekHeading, type ResolvedSchedule, type ResolvedWeek } from '../engine/cycleEngine';
-import type { SelectedCell } from '../store/usePlannerStore';
+import { usePlannerStore, type SelectedCell } from '../store/usePlannerStore';
 import { BinderTitle } from './BinderTitle';
 import { TimetableTable, WeeklyNotesPanel } from './TimetableTable';
 import { monthLabel } from '../engine/dateUtils';
@@ -109,9 +109,10 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   });
 
   const activeMonth = monthLabel(week.mondayIso);
+  const binding = usePlannerStore((s) => s.workspace.uiPreferences.binding ?? 'ring2');
 
   return (
-    <div className={`binder-shell cover-${coverTheme}`}>
+    <div className={`binder-shell cover-${coverTheme} binding-${binding}`}>
       {/* Right-edge monthly binder divider tabs */}
       <div className="binder-tabs hidden lg:flex">
         {monthTabs.map((tab) => (
@@ -131,17 +132,18 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
       <div className="spread-wrapper">
         <div className="spine-crease" />
 
-        {/* 2 Metallic Binder Rings */}
-        <div className="binder-ring-assembly" style={{ top: '34%' }}>
-          <div className="punch-hole" />
-          <div className="metal-ring" />
-          <div className="punch-hole" />
-        </div>
-        <div className="binder-ring-assembly" style={{ top: '66%' }}>
-          <div className="punch-hole" />
-          <div className="metal-ring" />
-          <div className="punch-hole" />
-        </div>
+        {/* Binding: stitched notebook seam, or 2 / 3 metal rings */}
+        {binding === 'notebook' ? (
+          <div className="notebook-stitch" />
+        ) : (
+          (binding === 'ring3' ? ['22%', '50%', '78%'] : ['34%', '66%']).map((top) => (
+            <div key={top} className="binder-ring-assembly" style={{ top }}>
+              <div className="punch-hole" />
+              <div className="metal-ring" />
+              <div className="punch-hole" />
+            </div>
+          ))
+        )}
 
         {/* 3D Page Flip Leaf */}
         {flipDir && (

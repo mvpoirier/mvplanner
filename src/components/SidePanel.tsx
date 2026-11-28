@@ -19,9 +19,17 @@ import {
 import type {
   AcademicYearBinder,
   BinderCoverTheme,
+  BindingStyle,
   NoteFontMode,
   ViewMode,
 } from '../types/planner';
+import { usePlannerStore } from '../store/usePlannerStore';
+
+const BINDINGS: { id: BindingStyle; label: string; title: string }[] = [
+  { id: 'notebook', label: 'Notebook', title: 'Stitched notebook, no rings' },
+  { id: 'ring2', label: '2-ring', title: '2-ring binder (default)' },
+  { id: 'ring3', label: '3-ring', title: '3-ring binder' },
+];
 import { formatWeekShortLabel, type ResolvedSchedule } from '../engine/cycleEngine';
 import type { FileSyncStatus } from '../hooks/useLocalFileSync';
 import type { DesktopAppControls } from '../hooks/useDesktopApp';
@@ -111,6 +119,8 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onOpenReminders,
 }) => {
   const reminders = useReminderPrefs();
+  const binding = usePlannerStore((s) => s.workspace.uiPreferences.binding ?? 'ring2');
+  const setBinding = usePlannerStore((s) => s.setBinding);
   const fileLabel: Record<FileSyncStatus, string> = {
     unsupported: 'Backup file',
     unlinked: 'Set up sync file',
@@ -347,6 +357,27 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                     style={{ backgroundColor: c.bg }}
                     title={c.label}
                   />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-600">Binding</span>
+              <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="radiogroup" aria-label="Binding">
+                {BINDINGS.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={binding === b.id}
+                    onClick={() => setBinding(b.id)}
+                    title={b.title}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer ${
+                      binding === b.id ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
                 ))}
               </div>
             </div>
