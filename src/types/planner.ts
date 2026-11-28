@@ -114,6 +114,7 @@ export interface PlannerWorkspace {
     noteFont: NoteFontMode;
     paperSize: PaperSize;
   };
+  /** @deprecated Google Drive sync was removed; kept so older saved workspaces still load. */
   googleSync?: {
     driveFileId?: string;
     lastSyncedAt?: string;

@@ -1,6 +1,6 @@
 # MVPlanner
 
-A tactile, physical 2-ring binder teacher timetable planner backed by a rotating-cycle scheduling engine, Smart Bump Forward lesson shifting, multi-year binder archiving, private Google Drive/Sheets sync, and a 6-format duplex print & archive studio.
+A tactile, physical 2-ring binder teacher timetable planner backed by a rotating-cycle scheduling engine, Smart Bump Forward lesson shifting, multi-year binder archiving, no-sign-in sync via a linked file, and a 6-format duplex print & archive studio.
 
 Live deployment: **https://mvpoirier.github.io/mvplanner/**
 
@@ -22,9 +22,8 @@ Live deployment: **https://mvpoirier.github.io/mvplanner/**
   4. Full Workspace JSON Archive (optional AES-GCM encryption)
   5. Excel (`.xlsx`) / CSV Workbook (`Grid` + `FINAL` tabs)
   6. RFC 5545 Calendar Feed (`.ics`) & Standalone Offline HTML / Markdown Archive
-- **Milestone 2 — Zero-Backend Google Drive & Sheets Sync**: Client-side Google Identity Services (GIS) OAuth saves your full workspace to a private `mvplanner-workspace.json` file in your Google Drive (with `modifiedTime` conflict guard), imports/refreshes from your Google Sheet without wiping lesson notes, and optionally pushes a plain-text mirror to a `MVPlanner_Mirror` tab.
 
-- **Linked Sync File (no sign-in)**: Link a `mvplanner-workspace.json` file inside a folder that OneDrive, Dropbox, iCloud or Google Drive for desktop already syncs. Every edit saves to it automatically; on open (and whenever you return to the tab) MVPlanner loads newer changes from your other computers, and asks which copy to keep if both changed. Works without Google OAuth, so it keeps working if a school blocks third-party sign-in. Chrome/Edge only (File System Access API); other browsers get manual download/open buttons. Encrypted with your passphrase when the lock is on.
+- **Linked Sync File (no sign-in)**: Link a `mvplanner-workspace.json` file inside a folder that OneDrive, Dropbox, iCloud or Google Drive for desktop already syncs. Every edit saves to it automatically; on open (and whenever you return to the tab) MVPlanner loads newer changes from your other computers, and asks which copy to keep if both changed. No accounts or sign-in, so school sign-in policies can't block it. Chrome/Edge only (File System Access API); other browsers get manual download/open buttons. Encrypted with your passphrase when the lock is on.
 
 ---
 
@@ -40,28 +39,4 @@ npm run build   # Type-checks and builds static bundle into dist/
 ### Deployment
 
 Every push to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes `dist/` to GitHub Pages.
-One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. To bake in a Google Client ID, add a repository variable `VITE_GOOGLE_CLIENT_ID` (Settings → Secrets and variables → Actions → Variables).
-
----
-
-## Google Cloud Console OAuth Setup Guide (Milestone 2)
-
-MVPlanner uses client-side **Google Identity Services (GIS)** — no backend server or database required. To enable **"Sign in with Google"** for private Drive sync and Google Sheets import:
-
-1. Open [Google Cloud Console](https://console.cloud.google.com/) and create a new free project (e.g. `MVPlanner`).
-2. Go to **APIs & Services → Library** and enable:
-   - **Google Drive API**
-   - **Google Sheets API**
-3. Go to **APIs & Services → OAuth consent screen**:
-   - Choose **External** (or Internal if using a school Workspace org).
-   - Add scopes: `.../auth/drive.file` and `.../auth/spreadsheets`.
-   - Under **Test users**, add your own Google email address (no app verification needed for personal use).
-4. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
-   - Application type: **Web application**
-   - Authorized JavaScript origins:
-     - `https://mvpoirier.github.io`
-     - `http://localhost:5173`
-   - Click **Create** and copy the generated **Client ID** (`xxxx.apps.googleusercontent.com`).
-5. Use the Client ID in either of two ways:
-   - **Per-browser**: Open the **Google Sync** drawer in MVPlanner and paste the Client ID directly, **or**
-   - **Baked into build**: Create `.env.local` with `VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com` before running `npm run build`.
+One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.

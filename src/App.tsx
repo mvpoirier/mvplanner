@@ -13,11 +13,8 @@ import { BinderShelfModal } from './components/BinderShelfModal';
 import { ExportStudioModal } from './components/ExportStudioModal';
 import { SetupWizardModal } from './components/SetupWizardModal';
 import { SetupDrawer } from './components/SetupDrawer';
-import { GoogleSyncDrawer } from './components/GoogleSyncDrawer';
 import { FileSyncDrawer } from './components/FileSyncDrawer';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
-import type { GoogleAuthSession } from './services/googleAuth';
-import { saveWorkspaceToDrive } from './services/googleDriveSync';
 import type { PlannerWorkspace } from './types/planner';
 
 export default function App() {
@@ -30,7 +27,6 @@ export default function App() {
   const viewMode = usePlannerStore((s) => s.viewMode);
   const selectedCell = usePlannerStore((s) => s.selectedCell);
   const toastMessage = usePlannerStore((s) => s.toastMessage);
-  const syncStatus = usePlannerStore((s) => s.syncStatus);
   const dirtyRevision = usePlannerStore((s) => s.dirtyRevision);
   const localSaveStatus = usePlannerStore((s) => s.localSaveStatus);
   const lastLocalSavedAt = usePlannerStore((s) => s.lastLocalSavedAt);
@@ -48,8 +44,6 @@ export default function App() {
   const setNoteFont = usePlannerStore((s) => s.setNoteFont);
   const undo = usePlannerStore((s) => s.undo);
   const redo = usePlannerStore((s) => s.redo);
-  const setSyncStatus = usePlannerStore((s) => s.setSyncStatus);
-  const updateGoogleSync = usePlannerStore((s) => s.updateGoogleSync);
   const showToast = usePlannerStore((s) => s.showToast);
 
   const [unlockInput, setUnlockInput] = useState('');
@@ -59,7 +53,6 @@ export default function App() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [googleOpen, setGoogleOpen] = useState(false);
   const [fileSyncOpen, setFileSyncOpen] = useState(false);
   const fileSync = useLocalFileSync();
   const fileSyncSaveNow = fileSync.saveNow;
@@ -67,15 +60,6 @@ export default function App() {
   const [activeEdit, setActiveEdit] = useState<ActiveEditTarget | null>(null);
   const [flipDir, setFlipDir] = useState<'next' | 'prev' | null>(null);
   const [flipKey, setFlipKey] = useState(0);
-
-  const [googleSession, setGoogleSession] = useState<GoogleAuthSession | null>(null);
-  const [conflictRemote, setConflictRemote] = useState<{
-    workspace: PlannerWorkspace;
-    modifiedTime: string;
-    fileId: string;
-  } | null>(null);
-
-  const lastSyncedRev = useRef(0);
 
   useEffect(() => {
     hydrate();
@@ -93,51 +77,11 @@ export default function App() {
 
   const [showSaveBadge, setShowSaveBadge] = useState(false);
 
-  const syncDriveNow = useCallback(async () => {
-    const state = usePlannerStore.getState();
-    if (!googleSession || state.dirtyRevision === 0 || state.dirtyRevision === lastSyncedRev.current) {
-      return;
-    }
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setSyncStatus('offline');
-      return;
-    }
-    setSyncStatus('syncing');
-    try {
-      const res = await saveWorkspaceToDrive(googleSession.accessToken, state.workspace, {
-        fileId: state.workspace.googleSync?.driveFileId,
-        expectedRemoteModifiedTime: state.workspace.googleSync?.remoteModifiedTime,
-      });
-      if (res.status === 'conflict' && res.remoteWorkspace) {
-        setConflictRemote({
-          workspace: res.remoteWorkspace,
-          modifiedTime: res.modifiedTime,
-          fileId: res.fileId,
-        });
-        setSyncStatus('conflict', 'Remote Drive file changed on another device.');
-        showToast('Google Drive sync conflict — open Google Sync to resolve.');
-      } else {
-        lastSyncedRev.current = state.dirtyRevision;
-        updateGoogleSync({
-          driveFileId: res.fileId,
-          remoteModifiedTime: res.modifiedTime,
-          lastSyncedAt: new Date().toISOString(),
-        });
-        setSyncStatus('saved');
-      }
-    } catch (err) {
-      setSyncStatus('error', err instanceof Error ? err.message : 'Auto-sync failed.');
-    }
-  }, [googleSession, setSyncStatus, updateGoogleSync, showToast]);
-
   const finishEditingCell = useCallback(() => {
     setActiveEdit(null);
     void flushPersist();
     void fileSyncSaveNow();
-    if (googleSession) {
-      void syncDriveNow();
-    }
-  }, [flushPersist, googleSession, syncDriveNow, fileSyncSaveNow]);
+  }, [flushPersist, fileSyncSaveNow]);
 
   const goToWeek = useCallback(
     (targetIdx: number) => {
@@ -188,14 +132,12 @@ export default function App() {
 
   // Show subtle bottom-left save badge briefly after each save
   useEffect(() => {
-    if (localSaveStatus === 'idle' && syncStatus === 'idle') return;
+    if (localSaveStatus === 'idle') return;
     setShowSaveBadge(true);
-    if (localSaveStatus === 'saving' || syncStatus === 'syncing' || syncStatus === 'conflict' || syncStatus === 'error') {
-      return;
-    }
+    if (localSaveStatus === 'saving') return;
     const t = setTimeout(() => setShowSaveBadge(false), 2600);
     return () => clearTimeout(t);
-  }, [localSaveStatus, lastLocalSavedAt, syncStatus]);
+  }, [localSaveStatus, lastLocalSavedAt]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -217,15 +159,6 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [goToWeek, goToToday, safeWeekIdx, undo, redo, shelfOpen, wizardOpen, exportOpen, activeEdit]);
-
-  // Debounced auto-save to private Google Drive JSON while typing (1.5s after edits when signed in)
-  useEffect(() => {
-    if (!googleSession || dirtyRevision === 0 || dirtyRevision === lastSyncedRev.current) return;
-    const timer = setTimeout(() => {
-      void syncDriveNow();
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [dirtyRevision, googleSession, syncDriveNow]);
 
   if (!hydrated) {
     return (
@@ -309,8 +242,6 @@ export default function App() {
         noteFont={workspace.uiPreferences.noteFont}
         viewMode={viewMode}
         isLockedEnabled={Boolean(lockPassphrase)}
-        syncStatus={syncStatus}
-        googleEmail={googleSession?.profile?.email ?? null}
         canUndo={canUndo}
         canRedo={canRedo}
         onPrevWeek={() => goToWeek(safeWeekIdx - 1)}
@@ -331,7 +262,6 @@ export default function App() {
         onOpenWizard={() => setWizardOpen(true)}
         onOpenSetup={() => setSetupOpen(true)}
         onOpenExport={() => setExportOpen(true)}
-        onOpenGoogleSync={() => setGoogleOpen(true)}
         fileSyncStatus={fileSync.status}
         fileSyncName={fileSync.fileName}
         onOpenFileSync={() => setFileSyncOpen(true)}
@@ -426,16 +356,6 @@ export default function App() {
         schedule={schedule}
       />
 
-      <GoogleSyncDrawer
-        open={googleOpen}
-        onClose={() => setGoogleOpen(false)}
-        binder={activeBinder}
-        session={googleSession}
-        onSessionChange={setGoogleSession}
-        conflictRemote={conflictRemote}
-        onClearConflict={() => setConflictRemote(null)}
-      />
-
       {/* Sync file needs attention: visible without opening the side panel */}
       {!fileSyncOpen && (fileSync.status === 'needs-permission' || fileSync.status === 'conflict' || fileSync.status === 'error') && (
         <button
@@ -462,28 +382,12 @@ export default function App() {
 
       {/* Subtle Auto-Save Status Pill (fades away cleanly when idle) */}
       {showSaveBadge && (
-        <div
-          className={`fixed bottom-4 left-4 z-40 rounded-full px-3 py-1 text-[11px] font-semibold shadow-md border backdrop-blur transition-opacity ${
-            syncStatus === 'conflict'
-              ? 'bg-amber-50/95 border-amber-300 text-amber-900'
-              : syncStatus === 'error'
-                ? 'bg-red-50/95 border-red-300 text-red-800'
-                : 'bg-white/90 border-slate-200 text-slate-700'
-          }`}
-        >
-          {syncStatus === 'syncing'
-            ? 'Syncing to Google Drive…'
-            : syncStatus === 'conflict'
-              ? 'Drive sync conflict'
-              : syncStatus === 'error'
-                ? 'Drive sync error (saved locally)'
-                : localSaveStatus === 'saving'
-                  ? 'Saving…'
-                  : googleSession && syncStatus === 'saved'
-                    ? 'Saved to Drive ✓'
-                    : fileSync.status === 'idle'
-                      ? 'Saved to sync file ✓'
-                      : 'Saved locally ✓'}
+        <div className="fixed bottom-4 left-4 z-40 rounded-full px-3 py-1 text-[11px] font-semibold shadow-md border backdrop-blur transition-opacity bg-white/90 border-slate-200 text-slate-700">
+          {localSaveStatus === 'saving'
+            ? 'Saving…'
+            : fileSync.status === 'idle'
+              ? 'Saved to sync file ✓'
+              : 'Saved locally ✓'}
         </div>
       )}
 

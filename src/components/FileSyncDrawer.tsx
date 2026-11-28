@@ -237,7 +237,7 @@ export const FileSyncDrawer: React.FC<FileSyncDrawerProps> = ({ open, onClose, s
 
           <p className="text-[11px] text-slate-500 leading-relaxed">
             If you&apos;ve turned on the passphrase lock, the sync file is encrypted with the same
-            passphrase. Google sign-in sync still works alongside this if your account allows it.
+            passphrase.
           </p>
         </div>
       </div>

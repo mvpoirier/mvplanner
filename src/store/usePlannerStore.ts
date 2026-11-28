@@ -34,7 +34,6 @@ export interface SelectedCell {
   periodId: string;
 }
 
-export type SyncStatus = 'idle' | 'syncing' | 'saved' | 'offline' | 'conflict' | 'error';
 
 interface PlannerState {
   workspace: PlannerWorkspace;
@@ -54,9 +53,6 @@ interface PlannerState {
   past: Record<string, AcademicYearBinder>[];
   future: Record<string, AcademicYearBinder>[];
 
-  // Google Drive sync status
-  syncStatus: SyncStatus;
-  syncError: string | null;
   dirtyRevision: number;
 
   // Lifecycle & persistence
@@ -93,8 +89,6 @@ interface PlannerState {
 
   // Workspace replacement & sync
   replaceWorkspace: (next: PlannerWorkspace) => void;
-  updateGoogleSync: (patch: Partial<NonNullable<PlannerWorkspace['googleSync']>>) => void;
-  setSyncStatus: (status: SyncStatus, error?: string | null) => void;
   localSaveStatus: 'idle' | 'saving' | 'saved';
   lastLocalSavedAt: string | null;
   flushPersist: () => Promise<void>;
@@ -162,8 +156,6 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   past: [],
   future: [],
 
-  syncStatus: 'idle',
-  syncError: null,
   dirtyRevision: 0,
   localSaveStatus: 'idle',
   lastLocalSavedAt: null,
@@ -619,17 +611,6 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     schedulePersist(next, state.lockPassphrase);
   },
 
-  updateGoogleSync: (patch) => {
-    const state = get();
-    const nextWs: PlannerWorkspace = {
-      ...state.workspace,
-      googleSync: { ...state.workspace.googleSync, ...patch },
-    };
-    set({ workspace: nextWs });
-    schedulePersist(nextWs, state.lockPassphrase);
-  },
-
-  setSyncStatus: (syncStatus, syncError = null) => set({ syncStatus, syncError }),
 
   undo: () => {
     const state = get();
