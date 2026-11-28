@@ -69,12 +69,23 @@ export default function App() {
   const [flipDir, setFlipDir] = useState<'next' | 'prev' | null>(null);
   const [flipKey, setFlipKey] = useState(0);
 
+  // Phone view only on phone-sized screens (not on a computer, in the browser or in the Mac app)
+  const [isPhone, setIsPhone] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const on = () => setIsPhone(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   useEffect(() => {
     hydrate();
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setViewMode('phone');
-    }
-  }, [hydrate, setViewMode]);
+  }, [hydrate]);
+  useEffect(() => {
+    // Phone screens start in phone view (you can still switch); bigger screens never show it.
+    setViewMode(isPhone ? 'phone' : usePlannerStore.getState().viewMode === 'phone' ? 'binder' : usePlannerStore.getState().viewMode);
+  }, [isPhone, setViewMode]);
 
   const activeBinder =
     workspace.binders[workspace.activeBinderId] ?? Object.values(workspace.binders)[0];
@@ -281,6 +292,7 @@ export default function App() {
         onRedo={redo}
         onOpenShelf={() => setShelfOpen(true)}
         onOpenWizard={() => setWizardOpen(true)}
+        isPhone={isPhone}
         onOpenSetup={() => setSetupOpen(true)}
         onOpenExport={() => setExportOpen(true)}
         fileSyncStatus={fileSync.status}
@@ -315,6 +327,8 @@ export default function App() {
             onJumpWeek={goToWeek}
             onJumpToday={goToToday}
             todayIso={todayISO()}
+            onStartWizard={() => setWizardOpen(true)}
+            onOpenSync={() => setFileSyncOpen(true)}
             searchSlot={<SearchBox binder={activeBinder} schedule={schedule} onPick={openSearchHit} />}
             statusSlot={
               <SyncStatusChip
@@ -396,27 +410,6 @@ export default function App() {
         schedule={schedule}
       />
 
-      {/* Sync file needs attention: visible without opening the side panel */}
-      {!fileSyncOpen && (fileSync.status === 'needs-permission' || fileSync.status === 'conflict' || fileSync.status === 'error') && (
-        <button
-          type="button"
-          onClick={() => {
-            if (fileSync.status === 'needs-permission') void fileSync.reconnect();
-            else setFileSyncOpen(true);
-          }}
-          className={`fixed bottom-14 left-4 z-40 rounded-full px-3.5 py-1.5 text-[11px] font-semibold shadow-md border cursor-pointer ${
-            fileSync.status === 'needs-permission'
-              ? 'bg-blue-700 border-blue-800 text-white hover:bg-blue-800'
-              : 'bg-amber-50 border-amber-400 text-amber-900 hover:bg-amber-100'
-          }`}
-        >
-          {fileSync.status === 'needs-permission'
-            ? `Reconnect ${fileSync.fileName ?? 'sync file'}`
-            : fileSync.status === 'conflict'
-              ? 'Sync file changed elsewhere — choose a copy'
-              : 'Sync file problem — tap to fix'}
-        </button>
-      )}
 
       <RemindersDrawer
         open={remindersOpen}

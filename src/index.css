@@ -912,3 +912,91 @@ body {
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
+
+/* ---------- Round 3 ---------- */
+
+/* Right page header uses the same columns as the grid below, so search ends over Friday */
+.page-meta-bar-right {
+  display: grid;
+  grid-template-columns: 71% 29%;
+}
+.page-meta-bar-right > span:first-child { padding-right: 2px; }
+
+/* Timetable title: label-maker tape in the cover colour */
+.title-tape {
+  --tape: #1d3f7a;
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 11px 3px;
+  border: none;
+  border-radius: 2px;
+  background: var(--tape);
+  box-shadow: 0 1.5px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  color: #f1f5f9;
+  font: 700 11.5px/1.35 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: rotate(-1.2deg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.title-tape-input { outline: 2px solid #93c5fd; text-transform: none; letter-spacing: 0.04em; }
+.cover-nist-blue .title-tape { --tape: #1d3f7a; }
+.cover-charcoal .title-tape { --tape: #2b3039; }
+.cover-forest .title-tape { --tape: #1c4a3a; }
+.cover-burgundy .title-tape { --tape: #5f1a2b; }
+.cover-linen .title-tape { --tape: #7f6f59; }
+.title-demo-tag {
+  font: 700 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  letter-spacing: 0.08em;
+  color: #c2410c;
+  border: 1px solid rgba(194, 65, 12, 0.45);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* Demo Timetable: weeks that aren't filled in */
+.demo-week-card {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-44%, -50%);
+  width: 340px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.18);
+  z-index: 30;
+}
+.demo-card-primary, .demo-card-secondary {
+  height: 36px;
+  border-radius: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.demo-card-primary { background: #1d3f7a; color: #fff; border: none; }
+.demo-card-primary:hover { background: #163262; }
+.demo-card-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; font-weight: 600; }
+.demo-card-secondary:hover { background: #f8fafc; }
+.demo-card-link { color: #1d4ed8; font-weight: 600; font-size: 11.5px; cursor: pointer; background: none; border: none; }
+
+/* Sticky notes and their heading follow the note font setting (Aa) */
+.font-handwritten .sticky-note,
+.font-handwritten .notes-panel-hdr,
+.font-handwritten .sticky-add {
+  font-family: "Comic Sans MS", "Bradley Hand", "Segoe Print", cursive, sans-serif;
+}
+.font-sans .sticky-note,
+.font-sans .notes-panel-hdr,
+.font-sans .sticky-add {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+}
+.font-sans .sticky-note { font-size: 11.5px; }

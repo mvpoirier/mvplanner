@@ -1,66 +1,90 @@
-// Public zero-PII interactive demo binder for unauthenticated visitors.
-// Uses the clean NIST 2026-2027 structure with generic sample physics/science lesson plans.
+// "Demo Timetable": what a first-time visitor sees. Made-up classes on a simple 5-day cycle;
+// only the week it opens on is filled in, with lesson notes that explain how MVPlanner works.
+// Every other week is blank on purpose, so nobody starts planning for real in the demo.
 
-import { cellKey, type AcademicYearBinder, type PlannerWorkspace } from '../types/planner';
-import { createNist2026Binder } from './nist2026_2027';
+import { cellKey, type AcademicYearBinder, type CourseDefinition, type PlannerWorkspace } from '../types/planner';
+import { NIST_PERIODS } from './nist2026_2027';
+import { currentSchoolYearStart, defaultYearDates } from './schoolYears';
+import { locateToday, resolveSchedule } from '../engine/cycleEngine';
+import { todayISO } from '../engine/dateUtils';
 
-export function createDemoBinder(): AcademicYearBinder {
-  const base = createNist2026Binder({
-    id: 'demo-2026-2027',
-    title: 'NIST 2026–2027 (Demo)',
-    schoolLabel: 'NIST 26/27',
-  });
+const course = (
+  id: string,
+  code: string,
+  name: string,
+  category: CourseDefinition['category'],
+  color: string,
+): CourseDefinition => ({ id, code, name, category, color });
 
-  base.cellPlans = {
-    // Week 1 (Aug 17–21)
-    [cellKey('2026-08-19', 'P1')]: { text: 'Course intro & IA timeline', ink: 'blue', seq: '1/3' },
-    [cellKey('2026-08-19', 'P3')]: { text: 'Welcome circle & CAS check-in', ink: 'pencil' },
-    [cellKey('2026-08-19', 'P4')]: { text: 'A1 Kinematics diagnostic', ink: 'blue' },
-    [cellKey('2026-08-20', 'P1')]: { text: 'A1 Uncertainties & graphing', ink: 'blue' },
-    [cellKey('2026-08-20', 'P2')]: { text: 'Lab safety & Bunsen burner demo', ink: 'pencil' },
-    [cellKey('2026-08-21', 'P2')]: { text: 'Criterion B lab expectations', ink: 'blue' },
+const DEMO_COURSES: Record<string, CourseDefinition> = {
+  PHY10: course('PHY10', 'Y10 PHY', 'Year 10 Physics', 'class', '#a7c3f2'),
+  SCI8: course('SCI8', 'Y8 SCI', 'Year 8 Science', 'class', '#d3eaf1'),
+  CHEM11: course('CHEM11', 'Y11 CHEM', 'Year 11 Chemistry', 'class', '#f3cccc'),
+  PHY12: course('PHY12', 'Y12 PHY', 'Year 12 Physics', 'class', '#d9d2e9'),
+  DUTY: course('DUTY', 'DUTY LIBRARY', 'Library duty', 'duty', '#ffff00'),
+};
 
-    // Week 9 (Oct 19–23 — H4, I4, J4, A5, Fri Rama V holiday)
-    [cellKey('2026-10-19', 'P1')]: { text: 'A2 Forces & FBDs', ink: 'blue', seq: '1/3' },
-    [cellKey('2026-10-19', 'P3')]: { text: 'D1 Gravitation fields', ink: 'blue', seq: '1/2' },
-    [cellKey('2026-10-19', 'P4')]: { text: 'Waves intro: transverse vs longitudinal', ink: 'pencil' },
-    [cellKey('2026-10-20', 'P1')]: { text: 'Thermal energy transfer lab', ink: 'blue', star: true },
-    [cellKey('2026-10-20', 'P2')]: { text: 'D1 Orbital motion & Kepler', ink: 'blue', seq: '2/2', circled: true },
-    [cellKey('2026-10-20', 'P3')]: { text: 'Wave speed v = fλ practice', ink: 'pencil' },
-    [cellKey('2026-10-21', 'P2')]: { text: 'Reflection & refraction ray box', ink: 'blue' },
-    [cellKey('2026-10-21', 'P3')]: { text: 'D2 Electric fields intro', ink: 'blue' },
-    [cellKey('2026-10-21', 'P4')]: { text: 'Moderation & assessment calendar', ink: 'red', circled: true },
-    [cellKey('2026-10-22', 'P1')]: { text: 'D2 Coulomb law problems', ink: 'blue' },
-    [cellKey('2026-10-22', 'P3')]: { text: 'University essay check-in', ink: 'pencil' },
-    [cellKey('2026-10-22', 'P4')]: { text: 'A2 Friction lab setup', ink: 'red', star: true, pinNote: true, seq: '2/3' },
+// Day letter → period → course. One letter per weekday, so the week reads Mon–Fri as A–E.
+const DEMO_GRID: Record<string, Record<string, string>> = {
+  A: { P1: 'PHY10', P2: 'SCI8', LUNCH: 'DUTY', P4: 'PHY12' },
+  B: { P1: 'CHEM11', P3: 'SCI8', P4: 'SCI8' },
+  C: { P2: 'PHY12', P3: 'PHY10', P4: 'CHEM11' },
+  D: { P1: 'PHY10', LUNCH: 'DUTY', P3: 'SCI8', P4: 'CHEM11' },
+  E: { P1: 'CHEM11', P2: 'PHY12', P4: 'PHY10' },
+};
 
-    // Week 17 (Dec 14–18 — E8..I8, Early Dismissal Fri)
-    [cellKey('2026-12-14', 'P1')]: { text: 'IA Final Draft Review', ink: 'blue', circled: true },
-    [cellKey('2026-12-14', 'P3')]: { text: 'Circuits lab wrap-up', ink: 'pencil' },
-    [cellKey('2026-12-15', 'P1')]: { text: 'IA Final Polish', ink: 'blue' },
-    [cellKey('2026-12-15', 'P4')]: { text: 'Semester 1 Review', ink: 'blue', star: true },
-    [cellKey('2026-12-16', 'P4')]: { text: 'Semester 1 Capstone Lab', ink: 'blue' },
-    [cellKey('2026-12-17', 'P1')]: { text: 'Unit Quiz', ink: 'blue', circled: true },
-    [cellKey('2026-12-18', 'P2')]: { text: 'IA Final Submission DUE', ink: 'red', circled: true, pinNote: true },
+// Lesson notes for the demo week: weekday (0 = Mon) → period → note.
+const DEMO_NOTES: [number, string, string, Partial<{ ink: 'pencil' | 'blue' | 'red'; star: boolean; circled: boolean }>?][] = [
+  [0, 'P1', 'Double-click any lesson to write your plan.'],
+  [0, 'P2', 'Notes stay with the date, even when the cycle shifts.'],
+  [0, 'P4', 'Right-click a lesson → no reminder for it.'],
+  [1, 'P1', 'Press **⌘K** to search every note in the year.'],
+  [1, 'P3', '← → flip the weeks. **T** jumps back to today.'],
+  [2, 'P2', 'Lost a lesson? **Bump** moves your notes along.', { ink: 'blue' }],
+  [2, 'P3', 'Type **1/3** at the start of a line and MVPlanner offers to fill in 2/3 and 3/3.'],
+  [3, 'P1', 'Reminders pop up 10 min before each class.', { star: true }],
+  [3, 'P3', 'Today’s column is outlined in orange.'],
+  [3, 'P4', '**Unit ▾** in the editor plans a whole unit: U2 L1, L2…'],
+  [4, 'P1', 'Print or export a week: ☰ → Export.'],
+  [4, 'P4', 'Holidays? ☰ → Import School Calendar.', { ink: 'red', circled: true }],
+];
+
+export function createDemoBinder(today: string = todayISO()): AcademicYearBinder {
+  const year = currentSchoolYearStart(today);
+  const dates = defaultYearDates(year);
+  const binder: AcademicYearBinder = {
+    id: 'demo-timetable',
+    title: 'Demo Timetable',
+    schoolLabel: 'DEMO',
+    archived: false,
+    ...dates,
+    cycleLetters: ['A', 'B', 'C', 'D', 'E'],
+    periods: structuredClone(NIST_PERIODS),
+    courses: structuredClone(DEMO_COURSES),
+    cycleGrid: structuredClone(DEMO_GRID),
+    exceptions: [],
+    recurringRules: [],
+    cellPlans: {},
+    weeklyNotes: {},
+    createdAt: new Date().toISOString(),
   };
 
-  base.weeklyNotes = {
-    '2026-08-17': [
-      { id: 'dn1', text: 'Welcome back! Set up 13B ADV homeroom & lab safety', ink: 'blue' },
-      { id: 'dn2', text: 'Check Year 12 & 13 Physics textbook distribution', ink: 'pencil' },
-    ],
-    '2026-10-19': [
-      { id: 'dn3', text: 'Fri 23-Oct is Rama V Memorial Day — cycle pauses automatically', ink: 'blue' },
-      { id: 'dn4', text: 'Thu P4 12 PHY: Prep friction blocks & force sensors', ink: 'red', sourceCellKey: cellKey('2026-10-22', 'P4') },
-      { id: 'dn5', text: 'Try clicking any cell + "Bump Forward" to see Smart Bump in action!', ink: 'pencil' },
-    ],
-    '2026-12-14': [
-      { id: 'dn6', text: 'Winter Break Dec 21–Jan 8 (3 non-teaching weeks skipped → Jan 11 is Week 18 of 38)', ink: 'blue' },
-      { id: 'dn7', text: 'Fri 18-Dec Early Dismissal 11:30 — IA Final Submission DUE', ink: 'red', sourceCellKey: cellKey('2026-12-18', 'P2') },
-    ],
-  };
-
-  return base;
+  // Fill in the week the planner will open on
+  const schedule = resolveSchedule(binder);
+  const week = schedule.weeks[locateToday(schedule, today).weekIndex];
+  if (!week) return binder;
+  binder.demoWeek = week.mondayIso;
+  for (const [dayIdx, periodId, text, extra] of DEMO_NOTES) {
+    const day = week.days[dayIdx];
+    if (!day) continue;
+    binder.cellPlans[cellKey(day.iso, periodId)] = { text, ink: 'pencil', ...extra };
+  }
+  binder.weeklyNotes[week.mondayIso] = [
+    { id: 'demo-n1', text: 'Welcome! This is a demo — only this week is filled in.', ink: 'pencil' },
+    { id: 'demo-n2', text: 'Start your own: ☰ → New Year Setup Wizard', ink: 'blue' },
+    { id: 'demo-n3', text: 'Click “Not synced” (bottom right) to save to iCloud or OneDrive.', ink: 'pencil' },
+  ];
+  return binder;
 }
 
 export function createInitialWorkspace(): PlannerWorkspace {

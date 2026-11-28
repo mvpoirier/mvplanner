@@ -67,10 +67,37 @@ export interface CellPlan {
   circled?: boolean;
   star?: boolean;
   strike?: boolean;
+  /** @deprecated no longer shown */
   pinNote?: boolean;
-  seq?: string; // sequence tag e.g. '1/3'
+  /** @deprecated no longer shown */
+  seq?: string;
+  /** Part of a planned unit: shows "U2 L3" in the corner. Moves with the text when bumped. */
+  unit?: { id: string; lesson: number };
+  /** Line added automatically by a 1/3-style sequence started in this cell (cell key). */
+  seqFrom?: string;
   updatedAt?: string;
 }
+
+export interface UnitPlan {
+  id: string;
+  courseId: string;
+  number: string; // '2'
+  name: string; // 'Chemical reactions'
+  total: number; // lessons in the unit
+  createdAt: string;
+}
+
+export type NotesDisplayMode = 'single' | 'palette' | 'list';
+export interface NotesDisplay {
+  mode: NotesDisplayMode;
+  color: string; // single colour
+  palette: string[]; // up to 4, cycled
+}
+export const DEFAULT_NOTES_DISPLAY: NotesDisplay = {
+  mode: 'single',
+  color: '#fff59d',
+  palette: ['#fff59d', '#f8c9dc', '#cdeccd', '#d3e5fb'],
+};
 
 export interface WeeklyNoteItem {
   id: string;
@@ -103,6 +130,10 @@ export interface AcademicYearBinder {
   cellPlans: Record<string, CellPlan>; // `${date}__${periodId}` -> CellPlan
   weeklyNotes: Record<string, WeeklyNoteItem[]>; // `${mondayIsoDate}` -> notes
   terms?: TermRange[];
+  /** Planned units, by id (see CellPlan.unit). */
+  units?: Record<string, UnitPlan>;
+  /** Demo binder only: Monday of the one week that is filled in. */
+  demoWeek?: string;
   createdAt?: string;
 }
 
@@ -113,6 +144,7 @@ export interface PlannerWorkspace {
     coverTheme: BinderCoverTheme;
     noteFont: NoteFontMode;
     paperSize: PaperSize;
+    notesDisplay?: NotesDisplay;
   };
   /** @deprecated Google Drive sync was removed; kept so older saved workspaces still load. */
   googleSync?: {

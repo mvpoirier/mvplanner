@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoBinder } from '../../presets/demoBinder';
+import { createNist2026Binder as nistForExport } from '../../presets/nist2026_2027';
 import {
   parseCsvOrTextExceptions,
   parseIcsExceptions,
@@ -56,8 +57,24 @@ describe('Calendar Exception Bulk Importer', () => {
   });
 });
 
+describe('Demo Timetable', () => {
+  it('fills in only the week it opens on, with made-up classes', () => {
+    const demo = createDemoBinder('2026-11-26');
+    expect(demo.title).toBe('Demo Timetable');
+    expect(demo.demoWeek).toBe('2026-11-23');
+    const dates = new Set(Object.keys(demo.cellPlans).map((k) => k.slice(0, 10)));
+    expect([...dates].every((d) => d >= '2026-11-23' && d <= '2026-11-27')).toBe(true);
+    expect(Object.keys(demo.weeklyNotes)).toEqual(['2026-11-23']);
+    expect(Object.values(demo.courses).some((c) => c.code === 'Y10 PHY')).toBe(true);
+  });
+
+  it('opens on the coming week at the weekend', () => {
+    expect(createDemoBinder('2026-11-28').demoWeek).toBe('2026-11-30');
+  });
+});
+
 describe('Exporters', () => {
-  const binder = createDemoBinder();
+  const binder = nistForExport({ title: 'NIST 2026–2027 (Demo)' });
 
   it('generates valid ICS feed, Pacing Sheet, Markdown archive, and A4/Letter duplex print HTML', () => {
     const ics = generateIcsContent(binder, 10, 12);
