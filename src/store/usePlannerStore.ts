@@ -14,6 +14,8 @@ import {
   type PlannerWorkspace,
   type ViewMode,
   type WeeklyNoteItem,
+  type NotesDisplay,
+  DEFAULT_NOTES_DISPLAY,
 } from '../types/planner';
 import { createInitialWorkspace } from '../presets/demoBinder';
 import { smartBumpForward, type BumpScope } from '../engine/smartBumpEngine';
@@ -69,6 +71,7 @@ interface PlannerState {
   setCoverTheme: (theme: BinderCoverTheme) => void;
   setNoteFont: (font: NoteFontMode) => void;
   setPaperSize: (size: PaperSize) => void;
+  setNotesDisplay: (patch: Partial<NotesDisplay>) => void;
   showToast: (msg: string) => void;
 
   // Cell & note editing
@@ -259,6 +262,18 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     schedulePersist(next, get().lockPassphrase);
   },
 
+  setNotesDisplay: (patch) => {
+    const ws = get().workspace;
+    const current = ws.uiPreferences.notesDisplay ?? DEFAULT_NOTES_DISPLAY;
+    const next: PlannerWorkspace = {
+      ...ws,
+      uiPreferences: { ...ws.uiPreferences, notesDisplay: { ...current, ...patch } },
+      updatedAt: new Date().toISOString(),
+    };
+    set({ workspace: next, dirtyRevision: get().dirtyRevision + 1 });
+    schedulePersist(next, get().lockPassphrase);
+  },
+
   setPaperSize: (paperSize) => {
     const next: PlannerWorkspace = {
       ...get().workspace,
@@ -345,8 +360,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       dirtyRevision: state.dirtyRevision + 1,
     });
     schedulePersist(nextWs, state.lockPassphrase);
+    const code = binder.courses[courseId]?.code ?? courseId;
     state.showToast(
-      `Bumped ${result.movedCount} ${courseId} lesson${result.movedCount === 1 ? '' : 's'} forward (${scope === 'blank' ? 'stopped at blank' : 'full term'}). Ctrl+Z to undo.`,
+      scope === 'next'
+        ? `Moved to the next ${code} lesson. ⌘Z to undo.`
+        : `Moved ${result.movedCount} ${code} lesson${result.movedCount === 1 ? '' : 's'} along (${scope === 'blank' ? 'up to the next blank lesson' : 'all lessons from here'}). ⌘Z to undo.`,
     );
     return result.movedCount;
   },

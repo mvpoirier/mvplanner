@@ -5,7 +5,12 @@
 import { cellKey, type AcademicYearBinder, type CellPlan } from '../types/planner';
 import { resolveSchedule, resolveSlot, type ResolvedSchedule } from './cycleEngine';
 
-export type BumpScope = 'blank' | 'term';
+/**
+ * - 'next':  move this lesson's text into the class's next lesson (added above anything already there)
+ * - 'blank': shift this and the following lessons along until the first blank lesson
+ * - 'term':  shift every lesson from here to the end of the year
+ */
+export type BumpScope = 'next' | 'blank' | 'term';
 
 export interface CourseSlotRef {
   date: string;
@@ -51,8 +56,9 @@ export function listValidCourseSlots(
   return slots;
 }
 
+/** Empty = no note and not part of a unit (unit tags travel with Bump like text does). */
 function isPlanEmpty(plan: CellPlan | undefined): boolean {
-  return !plan || plan.text.trim() === '';
+  return !plan || (plan.text.trim() === '' && !plan.unit);
 }
 
 /**
@@ -78,6 +84,26 @@ export function smartBumpForward(
       movedCount: 0,
       affectedKeys: [],
       targetSlots: [],
+    };
+  }
+
+  if (scope === 'next') {
+    const from = binder.cellPlans[startKey];
+    if (isPlanEmpty(from)) {
+      return { nextCellPlans: { ...binder.cellPlans }, movedCount: 0, affectedKeys: [], targetSlots: [] };
+    }
+    const nextKey = allSlots[startIdx + 1].key;
+    const there = binder.cellPlans[nextKey];
+    const nextCellPlans: Record<string, CellPlan> = { ...binder.cellPlans };
+    nextCellPlans[nextKey] = isPlanEmpty(there)
+      ? { ...from! }
+      : { ...there!, text: `${from!.text.trim()}\n${there!.text.trim()}`, unit: there!.unit ?? from!.unit };
+    delete nextCellPlans[startKey];
+    return {
+      nextCellPlans,
+      movedCount: 1,
+      affectedKeys: [nextKey, startKey],
+      targetSlots: allSlots.slice(startIdx, startIdx + 2),
     };
   }
 

@@ -2,6 +2,7 @@
 
 import type { AcademicYearBinder } from '../types/planner';
 import { resolveSlot, type ResolvedSchedule } from './cycleEngine';
+import { plainText } from './richText';
 
 export type SearchHitKind = 'lesson' | 'note' | 'event' | 'holiday';
 
@@ -67,7 +68,7 @@ export function searchBinder(
         const course = slot.course;
         const where = `${wk} · ${dayLabel} · ${period.label}`;
 
-        const lessonText = plan?.text?.trim() ?? '';
+        const lessonText = plainText(plan?.text ?? '').trim();
         const courseText = course ? `${course.code} ${course.name ?? ''} ${course.room ?? ''}` : '';
         if (lessonText && matches(`${lessonText} ${courseText}`, terms)) {
           hits.push({
@@ -118,13 +119,13 @@ export function searchBinder(
     }
 
     for (const note of binder.weeklyNotes[week.mondayIso] ?? []) {
-      if (matches(note.text, terms)) {
+      if (matches(plainText(note.text), terms)) {
         hits.push({
           kind: 'note',
           weekIndex: week.index,
           dayIso: null,
           periodId: null,
-          title: note.text,
+          title: plainText(note.text),
           where: `${wk} · ${week.dateRange} · note`,
           chipLabel: 'Note',
           chipColor: '#fff59d',

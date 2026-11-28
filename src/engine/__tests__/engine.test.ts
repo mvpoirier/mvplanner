@@ -166,4 +166,21 @@ describe('Smart Bump Forward Engine', () => {
     expect(res.nextCellPlans[k3]).toBeUndefined();
     expect(res.nextCellPlans[k4]?.text).toBe('Lesson F');
   });
+
+  it('moves just the text into the next lesson in "next" mode, keeping what was there', () => {
+    const binder = createNist2026Binder();
+    const k1 = cellKey('2026-08-19', 'P1'); // A1
+    const k2 = cellKey('2026-08-25', 'P1'); // next 13 PHY lesson
+    const k3 = cellKey('2026-08-26', 'P1');
+    binder.cellPlans = {
+      [k1]: { text: 'Finish titration', ink: 'blue', unit: { id: 'u2', lesson: 3 } },
+      [k2]: { text: 'Rates intro', ink: 'pencil' },
+      [k3]: { text: 'Untouched', ink: 'pencil' },
+    };
+    const res = smartBumpForward(binder, '13 PHY', '2026-08-19', 'P1', 'next');
+    expect(res.nextCellPlans[k1]).toBeUndefined();
+    expect(res.nextCellPlans[k2]?.text).toBe('Finish titration\nRates intro');
+    expect(res.nextCellPlans[k2]?.unit).toEqual({ id: 'u2', lesson: 3 });
+    expect(res.nextCellPlans[k3]?.text).toBe('Untouched');
+  });
 });

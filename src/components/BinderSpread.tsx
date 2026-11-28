@@ -5,6 +5,7 @@ import React from 'react';
 import type { AcademicYearBinder, BinderCoverTheme } from '../types/planner';
 import { locateToday, formatWeekHeading, type ResolvedSchedule, type ResolvedWeek } from '../engine/cycleEngine';
 import type { SelectedCell } from '../store/usePlannerStore';
+import { BinderTitle } from './BinderTitle';
 import { TimetableTable, WeeklyNotesPanel } from './TimetableTable';
 import { monthLabel } from '../engine/dateUtils';
 
@@ -37,6 +38,7 @@ interface BinderSpreadProps {
     rect: { top: number; bottom: number; left: number; width: number },
   ) => void;
   onStopEdit: () => void;
+  onTabEdit?: (dir: 1 | -1) => void;
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onJumpWeek: (weekIdx: number) => void;
@@ -44,6 +46,9 @@ interface BinderSpreadProps {
   todayIso: string;
   searchSlot?: React.ReactNode;
   statusSlot?: React.ReactNode;
+  /** Demo binder: buttons on the card shown on weeks that aren't filled in. */
+  onStartWizard?: () => void;
+  onOpenSync?: () => void;
 }
 
 export const BinderSpread: React.FC<BinderSpreadProps> = ({
@@ -60,6 +65,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   onSelectCell,
   onStartEdit,
   onStopEdit,
+  onTabEdit,
   onPrevWeek,
   onNextWeek,
   onJumpWeek,
@@ -67,7 +73,11 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   todayIso,
   searchSlot,
   statusSlot,
+  onStartWizard,
+  onOpenSync,
 }) => {
+  const demoWeekIdx = binder.demoWeek ? schedule.weeks.findIndex((w) => w.mondayIso === binder.demoWeek) : -1;
+  const showDemoCard = demoWeekIdx >= 0 && week.mondayIso !== binder.demoWeek;
   const todayTip = (() => {
     const pos = locateToday(schedule, todayIso);
     const w = schedule.weeks[pos.weekIndex];
@@ -174,8 +184,33 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
               )}
               {binder.archived && <span className="text-[10px] text-slate-500">Archived · Read-Only</span>}
             </span>
-            {searchSlot}
+            <span className="flex-1 flex justify-center min-w-0 pl-3">
+              <BinderTitle title={binder.title} readOnly={binder.archived} isDemo={!!binder.demoWeek} />
+            </span>
           </div>
+          {showDemoCard && (
+            <div className="demo-week-card" role="note">
+              <div className="font-bold text-[15px] text-slate-900">This is the Demo Timetable</div>
+              <p className="text-slate-600 leading-relaxed">
+                Only the week of {schedule.weeks[demoWeekIdx].dateRange.split(',')[0]} is filled in, so you can see how
+                MVPlanner works. Ready to plan for real?
+              </p>
+              {onStartWizard && (
+                <button type="button" className="demo-card-primary" onClick={onStartWizard}>
+                  Start the setup wizard
+                </button>
+              )}
+              {onOpenSync && (
+                <button type="button" className="demo-card-secondary" onClick={onOpenSync}>
+                  Open my sync file (.json)
+                </button>
+              )}
+              <button type="button" className="demo-card-link" onClick={() => onJumpWeek(demoWeekIdx)}>
+                ← Back to the demo week
+              </button>
+            </div>
+          )}
+
           <div className="table-fit">
             <TimetableTable
               binder={binder}
@@ -186,6 +221,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
               onSelectCell={onSelectCell}
               onStartEdit={onStartEdit}
               onStopEdit={onStopEdit}
+              onTabEdit={onTabEdit}
             />
           </div>
         </section>
@@ -215,8 +251,13 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
           {/* Sync status: bottom-right of the planner */}
           {statusSlot && <div className="binder-status-slot">{statusSlot}</div>}
 
-          <div className="page-meta-bar">
-            <span className="text-[10.5px] font-semibold text-slate-600">{week.dateRange}</span>
+          {/* Same columns as the grid below, so search sits right above Friday */}
+          <div className="page-meta-bar page-meta-bar-right">
+            <span className="flex items-center justify-between gap-2 min-w-0">
+              <span className="text-[10.5px] font-semibold text-slate-600 whitespace-nowrap">{week.dateRange}</span>
+              {searchSlot}
+            </span>
+            <span />
           </div>
           <div className="right-page-grid">
             <div className="table-fit">
@@ -229,6 +270,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
                 onSelectCell={onSelectCell}
                 onStartEdit={onStartEdit}
                 onStopEdit={onStopEdit}
+              onTabEdit={onTabEdit}
               />
             </div>
             <WeeklyNotesPanel binder={binder} week={week} />

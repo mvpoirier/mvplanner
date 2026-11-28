@@ -27,6 +27,8 @@ import type { FileSyncStatus } from '../hooks/useLocalFileSync';
 import type { DesktopAppControls } from '../hooks/useDesktopApp';
 import { useReminderPrefs } from '../store/reminderPrefs';
 
+export type PhoneLayout = 'rotate' | 'binder' | 'phone';
+
 const COVERS: { id: BinderCoverTheme; bg: string; label: string }[] = [
   { id: 'nist-blue', bg: '#1e4b94', label: 'NIST Blue' },
   { id: 'charcoal', bg: '#2c313b', label: 'Charcoal' },
@@ -59,6 +61,9 @@ interface SidePanelProps {
   onRedo: () => void;
   onOpenShelf: () => void;
   onOpenWizard: () => void;
+  isPhone: boolean;
+  phoneLayout: PhoneLayout;
+  onPhoneLayout: (l: PhoneLayout) => void;
   onOpenSetup: () => void;
   onOpenCalendarImport: () => void;
   onOpenExport: () => void;
@@ -93,6 +98,9 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onRedo,
   onOpenShelf,
   onOpenWizard,
+  isPhone,
+  phoneLayout,
+  onPhoneLayout,
   onOpenSetup,
   onOpenCalendarImport,
   onOpenExport,
@@ -283,12 +291,14 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
               View Mode
             </div>
-            <div className="grid grid-cols-3 bg-slate-100 border border-slate-200 rounded-lg p-0.5 text-[11px]">
+            <div
+              className={`grid ${isPhone ? 'grid-cols-3' : 'grid-cols-2'} bg-slate-100 border border-slate-200 rounded-lg p-0.5 text-[11px]`}
+            >
               {(
                 [
                   ['binder', '3D Binder'],
                   ['flat', 'Flat Grid'],
-                  ['phone', 'Phone'],
+                  ...(isPhone ? [['phone', 'Phone']] : []),
                 ] as [ViewMode, string][]
               ).map(([m, label]) => (
                 <button
@@ -305,6 +315,20 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                 </button>
               ))}
             </div>
+            {isPhone && (
+              <label className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                Phone layout
+                <select
+                  value={phoneLayout}
+                  onChange={(e) => onPhoneLayout(e.target.value as PhoneLayout)}
+                  className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-800"
+                >
+                  <option value="rotate">Follow rotation</option>
+                  <option value="binder">Always binder</option>
+                  <option value="phone">Always phone view</option>
+                </select>
+              </label>
+            )}
           </div>
 
           {/* Cover Swatches & Font */}

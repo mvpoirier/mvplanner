@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, Redo2, Undo2 } from 'lucide-react';
 import { usePlannerStore } from './store/usePlannerStore';
-import { locateToday, resolveSchedule } from './engine/cycleEngine';
+import { locateToday, resolveSchedule, resolveSlot } from './engine/cycleEngine';
 import { todayISO } from './engine/dateUtils';
 import { SidePanel } from './components/SidePanel';
 import { BinderSpread } from './components/BinderSpread';
@@ -17,10 +17,20 @@ import { FileSyncDrawer } from './components/FileSyncDrawer';
 import { SearchBox } from './components/SearchBox';
 import { CalendarImportModal } from './components/CalendarImportModal';
 import { RemindersDrawer } from './components/RemindersDrawer';
+import { SequencePrompt } from './components/SequencePrompt';
+import { UnitPlannerModal } from './components/UnitPlannerModal';
+import { findSequenceStart } from './engine/richText';
+import {
+  fillSequence,
+  removeUnit,
+  removeWholeSequence,
+  sequenceAlreadyFilled,
+} from './engine/unitsAndSequences';
 import { SyncStatusChip } from './components/SyncStatusChip';
 import type { SearchHit } from './engine/search';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
 import { useDesktopApp } from './hooks/useDesktopApp';
+import type { PhoneLayout } from './components/SidePanel';
 import type { PlannerWorkspace } from './types/planner';
 
 export default function App() {
@@ -49,6 +59,7 @@ export default function App() {
   const setCoverTheme = usePlannerStore((s) => s.setCoverTheme);
   const setNoteFont = usePlannerStore((s) => s.setNoteFont);
   const undo = usePlannerStore((s) => s.undo);
+  const updateActiveBinder = usePlannerStore((s) => s.updateActiveBinder);
   const redo = usePlannerStore((s) => s.redo);
   const showToast = usePlannerStore((s) => s.showToast);
 
@@ -62,6 +73,9 @@ export default function App() {
   const [fileSyncOpen, setFileSyncOpen] = useState(false);
   const [calendarImportOpen, setCalendarImportOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
+  const [unitPlanner, setUnitPlanner] = useState<{ courseId: string; startKey: string } | null>(null);
+  const [seqMake, setSeqMake] = useState(false);
+  const [seqDismissed, setSeqDismissed] = useState<Set<string>>(() => new Set());
   const fileSync = useLocalFileSync();
   const fileSyncSaveNow = fileSync.saveNow;
 
@@ -69,12 +83,55 @@ export default function App() {
   const [flipDir, setFlipDir] = useState<'next' | 'prev' | null>(null);
   const [flipKey, setFlipKey] = useState(0);
 
+  // Phones only: landscape shows the binder, portrait the phone view (unless locked in ☰).
+  // Computers, browsers and the Mac app never switch to the phone view by themselves.
+  const readPhone = () =>
+    typeof window !== 'undefined' &&
+    window.matchMedia('(pointer: coarse)').matches &&
+    Math.min(window.screen.width, window.screen.height) < 600;
+  const readPortrait = () => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches;
+  const [isPhone, setIsPhone] = useState(readPhone);
+  const [isPortrait, setIsPortrait] = useState(readPortrait);
+  const [phoneLayout, setPhoneLayoutState] = useState<PhoneLayout>(() => {
+    try {
+      return (localStorage.getItem('mvplanner-phone-layout') as PhoneLayout) || 'rotate';
+    } catch {
+      return 'rotate';
+    }
+  });
+  const setPhoneLayout = useCallback((l: PhoneLayout) => {
+    setPhoneLayoutState(l);
+    try {
+      localStorage.setItem('mvplanner-phone-layout', l);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait)');
+    const on = () => {
+      setIsPortrait(mq.matches);
+      setIsPhone(readPhone());
+    };
+    mq.addEventListener('change', on);
+    window.addEventListener('resize', on);
+    return () => {
+      mq.removeEventListener('change', on);
+      window.removeEventListener('resize', on);
+    };
+  }, []);
   useEffect(() => {
     hydrate();
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setViewMode('phone');
+  }, [hydrate]);
+  useEffect(() => {
+    const current = usePlannerStore.getState().viewMode;
+    if (!isPhone) {
+      if (current === 'phone') setViewMode('binder');
+      return;
     }
-  }, [hydrate, setViewMode]);
+    const want = phoneLayout === 'rotate' ? (isPortrait ? 'phone' : 'binder') : phoneLayout;
+    if (current !== want && !(want === 'binder' && current === 'flat')) setViewMode(want);
+  }, [isPhone, isPortrait, phoneLayout, setViewMode]);
 
   const activeBinder =
     workspace.binders[workspace.activeBinderId] ?? Object.values(workspace.binders)[0];
@@ -91,6 +148,58 @@ export default function App() {
     void flushPersist();
     void fileSyncSaveNow();
   }, [flushPersist, fileSyncSaveNow]);
+
+  // Tab / Shift+Tab while editing: save and open the next / previous lesson (down the day, then the next day)
+  const [pendingEditKey, setPendingEditKey] = useState<string | null>(null);
+  const tabEdit = useCallback(
+    (dir: 1 | -1) => {
+      if (!activeEdit) return;
+      const lessons: { key: string; weekIdx: number }[] = [];
+      const lo = Math.max(0, safeWeekIdx - 2);
+      const hi = Math.min(schedule.weeks.length - 1, safeWeekIdx + 2);
+      for (let w = lo; w <= hi; w++) {
+        for (const day of schedule.weeks[w].days) {
+          if (!day.inBinderRange) continue;
+          for (const period of activeBinder.periods) {
+            if (period.kind !== 'period') continue;
+            const slot = resolveSlot(activeBinder, day, period);
+            if (!slot.course || slot.exceptionKind === 'full') continue;
+            lessons.push({ key: `${day.iso}__${period.id}`, weekIdx: w });
+          }
+        }
+      }
+      const curKey = `${activeEdit.date}__${activeEdit.periodId}`;
+      let i = lessons.findIndex((l) => l.key === curKey);
+      if (i === -1) {
+        // Editing a non-lesson cell: start from the nearest lesson after it
+        i = lessons.findIndex((l) => l.key > curKey) - (dir === 1 ? 1 : 0);
+      }
+      const next = lessons[i + dir];
+      if (!next) return;
+      finishEditingCell();
+      if (next.weekIdx !== safeWeekIdx) setWeekIndex(next.weekIdx);
+      setPendingEditKey(next.key);
+    },
+    [activeEdit, activeBinder, schedule, safeWeekIdx, finishEditingCell, setWeekIndex],
+  );
+  useEffect(() => {
+    if (!pendingEditKey) return;
+    let tries = 0;
+    const open = () => {
+      const el = document.querySelector<HTMLElement>(`[data-cell="${pendingEditKey}"]`);
+      if (!el) {
+        if (tries++ < 20) requestAnimationFrame(open);
+        else setPendingEditKey(null);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      const [date, periodId] = pendingEditKey.split('__');
+      setSelectedCell({ date, periodId });
+      setActiveEdit({ date, periodId, rect: { top: r.top, bottom: r.bottom, left: r.left, width: r.width } });
+      setPendingEditKey(null);
+    };
+    requestAnimationFrame(open);
+  }, [pendingEditKey, setSelectedCell]);
 
   const goToWeek = useCallback(
     (targetIdx: number) => {
@@ -128,7 +237,7 @@ export default function App() {
     const onDocClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement | null;
       if (!el) return;
-      if (el.closest('.tt-slot.editing') || el.closest('.floating-toolbar')) return;
+      if (el.closest('.tt-slot.editing') || el.closest('.floating-toolbar') || el.closest('.seq-prompt')) return;
       finishEditingCell();
     };
     document.addEventListener('mousedown', onDocClick);
@@ -249,6 +358,52 @@ export default function App() {
     setActiveEdit({ date, periodId, rect });
   };
 
+  // ----- Sequences & units for the lesson being edited -----
+  const editKey = activeEdit ? `${activeEdit.date}__${activeEdit.periodId}` : null;
+  const editPlan = editKey ? activeBinder.cellPlans[editKey] : undefined;
+  const editCourseId = (() => {
+    if (!activeEdit) return null;
+    const day = schedule.daysByIso[activeEdit.date];
+    const period = activeBinder.periods.find((p) => p.id === activeEdit.periodId);
+    return day && period ? resolveSlot(activeBinder, day, period).courseId ?? null : null;
+  })();
+  const seqStart = editPlan && !editPlan.seqFrom ? findSequenceStart(editPlan.text) : null;
+  const showSeqPrompt =
+    !!editKey &&
+    !!editCourseId &&
+    (seqMake ||
+      (!!seqStart && !sequenceAlreadyFilled(activeBinder, editKey) && !seqDismissed.has(`${editKey}|${seqStart.line}`)));
+  const addSequence = (total: number) => {
+    if (!editKey || !editCourseId) return;
+    updateActiveBinder((b) => {
+      const plan = b.cellPlans[editKey] ?? { text: '', ink: 'pencil' as const };
+      let text = plan.text;
+      let rest = seqStart?.rest ?? '';
+      if (seqMake || !seqStart) {
+        const [first, ...others] = text.split('\n');
+        rest = first.trim();
+        text = [`1/${total} ${rest}`, ...others].join('\n');
+      }
+      const withSource = { ...b, cellPlans: { ...b.cellPlans, [editKey]: { ...plan, text } } };
+      return { ...withSource, cellPlans: fillSequence(withSource, editCourseId, editKey, total, rest) };
+    });
+    setSeqMake(false);
+  };
+  const extraUnitItems: { label: string; onClick: () => void }[] = [];
+  if (editKey && sequenceAlreadyFilled(activeBinder, editKey)) {
+    extraUnitItems.push({
+      label: 'Remove the lines this 1/N added',
+      onClick: () => updateActiveBinder((b) => ({ ...b, cellPlans: removeWholeSequence(b, editKey) })),
+    });
+  }
+  if (editPlan?.seqFrom) {
+    const src = editPlan.seqFrom;
+    extraUnitItems.push({
+      label: 'Remove this whole sequence',
+      onClick: () => updateActiveBinder((b) => ({ ...b, cellPlans: removeWholeSequence(b, src) })),
+    });
+  }
+
   return (
     <div className={`min-h-screen w-full ${fontClass}`}>
       {/* Single Auto-Hide Corner Button + Slide-Out Overlay Side Panel */}
@@ -281,6 +436,9 @@ export default function App() {
         onRedo={redo}
         onOpenShelf={() => setShelfOpen(true)}
         onOpenWizard={() => setWizardOpen(true)}
+        isPhone={isPhone}
+        phoneLayout={phoneLayout}
+        onPhoneLayout={setPhoneLayout}
         onOpenSetup={() => setSetupOpen(true)}
         onOpenExport={() => setExportOpen(true)}
         fileSyncStatus={fileSync.status}
@@ -315,8 +473,32 @@ export default function App() {
             onJumpWeek={goToWeek}
             onJumpToday={goToToday}
             todayIso={todayISO()}
+            onTabEdit={tabEdit}
+            onStartWizard={() => setWizardOpen(true)}
+            onOpenSync={() => setFileSyncOpen(true)}
             searchSlot={<SearchBox binder={activeBinder} schedule={schedule} onPick={openSearchHit} />}
             statusSlot={
+              <span className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="undo-btn"
+                onClick={undo}
+                disabled={!canUndo}
+                aria-label="Undo"
+                title={`Undo (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}Z)`}
+              >
+                <Undo2 className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                className="undo-btn"
+                onClick={redo}
+                disabled={!canRedo}
+                aria-label="Redo"
+                title={`Redo (${navigator.platform.includes('Mac') ? '⌘⇧Z' : 'Ctrl+Y'})`}
+              >
+                <Redo2 className="w-3 h-3" />
+              </button>
               <SyncStatusChip
                 status={fileSync.status}
                 fileName={fileSync.fileName}
@@ -328,6 +510,7 @@ export default function App() {
                   else setFileSyncOpen(true);
                 }}
               />
+              </span>
             }
           />
         )}
@@ -342,6 +525,7 @@ export default function App() {
             onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
             onStartEdit={handleStartEdit}
             onStopEdit={finishEditingCell}
+            onTabEdit={tabEdit}
           />
         )}
 
@@ -375,6 +559,18 @@ export default function App() {
           week={currentWeek}
           target={activeEdit}
           onDone={finishEditingCell}
+          onPlanUnit={() => {
+            if (editCourseId && editKey) {
+              setUnitPlanner({ courseId: editCourseId, startKey: editKey });
+              finishEditingCell();
+            }
+          }}
+          onMakeSequence={() => setSeqMake(true)}
+          onRemoveUnit={() => {
+            const id = editPlan?.unit?.id;
+            if (id) updateActiveBinder((b) => removeUnit(b, id));
+          }}
+          extraUnitItems={extraUnitItems}
         />
       )}
 
@@ -396,27 +592,35 @@ export default function App() {
         schedule={schedule}
       />
 
-      {/* Sync file needs attention: visible without opening the side panel */}
-      {!fileSyncOpen && (fileSync.status === 'needs-permission' || fileSync.status === 'conflict' || fileSync.status === 'error') && (
-        <button
-          type="button"
-          onClick={() => {
-            if (fileSync.status === 'needs-permission') void fileSync.reconnect();
-            else setFileSyncOpen(true);
+
+      {activeEdit && showSeqPrompt && editKey && editCourseId && (
+        <SequencePrompt
+          key={`${editKey}-${seqMake ? 'make' : seqStart?.total}`}
+          binder={activeBinder}
+          schedule={schedule}
+          courseId={editCourseId}
+          fromKey={editKey}
+          total={seqMake ? null : (seqStart?.total ?? null)}
+          anchor={{
+            top: Math.min(activeEdit.rect.bottom + 6, window.innerHeight - 230),
+            left: Math.min(activeEdit.rect.left, window.innerWidth - 350),
           }}
-          className={`fixed bottom-14 left-4 z-40 rounded-full px-3.5 py-1.5 text-[11px] font-semibold shadow-md border cursor-pointer ${
-            fileSync.status === 'needs-permission'
-              ? 'bg-blue-700 border-blue-800 text-white hover:bg-blue-800'
-              : 'bg-amber-50 border-amber-400 text-amber-900 hover:bg-amber-100'
-          }`}
-        >
-          {fileSync.status === 'needs-permission'
-            ? `Reconnect ${fileSync.fileName ?? 'sync file'}`
-            : fileSync.status === 'conflict'
-              ? 'Sync file changed elsewhere — choose a copy'
-              : 'Sync file problem — tap to fix'}
-        </button>
+          onAdd={addSequence}
+          onDismiss={() => {
+            if (seqMake) setSeqMake(false);
+            else if (seqStart) setSeqDismissed((d) => new Set(d).add(`${editKey}|${seqStart.line}`));
+          }}
+        />
       )}
+
+      <UnitPlannerModal
+        open={!!unitPlanner}
+        onClose={() => setUnitPlanner(null)}
+        binder={activeBinder}
+        schedule={schedule}
+        courseId={unitPlanner?.courseId ?? null}
+        startKey={unitPlanner?.startKey ?? null}
+      />
 
       <RemindersDrawer
         open={remindersOpen}

@@ -775,7 +775,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
 }
 
-.ink-pencil { color: #3a3f47; }
+.ink-pencil { color: #111827; } /* shown as "Black" */
 .ink-blue   { color: #1648a8; }
 .ink-red    { color: #c02323; font-weight: 600; }
 
@@ -889,13 +889,14 @@ body {
 .floating-toolbar {
   position: fixed;
   z-index: 55;
+  white-space: nowrap;
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
   padding: 5px 8px;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.24);
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 5px;
   font-size: 11px;
@@ -911,4 +912,238 @@ body {
   color: #0f172a;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+}
+
+/* ---------- Round 3 ---------- */
+
+/* Right page header uses the same columns as the grid below, so search ends over Friday */
+.page-meta-bar-right {
+  display: grid;
+  grid-template-columns: 71% 29%;
+}
+.page-meta-bar-right > span:first-child { padding-right: 2px; }
+
+/* Timetable title: label-maker tape in the cover colour */
+.title-tape {
+  --tape: #1d3f7a;
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 11px 3px;
+  border: none;
+  border-radius: 2px;
+  background: var(--tape);
+  box-shadow: 0 1.5px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  color: #f1f5f9;
+  font: 700 11.5px/1.35 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: rotate(-1.2deg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.title-tape-input { outline: 2px solid #93c5fd; text-transform: none; letter-spacing: 0.04em; }
+.cover-nist-blue .title-tape { --tape: #1d3f7a; }
+.cover-charcoal .title-tape { --tape: #2b3039; }
+.cover-forest .title-tape { --tape: #1c4a3a; }
+.cover-burgundy .title-tape { --tape: #5f1a2b; }
+.cover-linen .title-tape { --tape: #7f6f59; }
+.title-demo-tag {
+  font: 700 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  letter-spacing: 0.08em;
+  color: #c2410c;
+  border: 1px solid rgba(194, 65, 12, 0.45);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* Demo Timetable: weeks that aren't filled in */
+.demo-week-card {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-44%, -50%);
+  width: 340px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.18);
+  z-index: 30;
+}
+.demo-card-primary, .demo-card-secondary {
+  height: 36px;
+  border-radius: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.demo-card-primary { background: #1d3f7a; color: #fff; border: none; }
+.demo-card-primary:hover { background: #163262; }
+.demo-card-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; font-weight: 600; }
+.demo-card-secondary:hover { background: #f8fafc; }
+.demo-card-link { color: #1d4ed8; font-weight: 600; font-size: 11.5px; cursor: pointer; background: none; border: none; }
+
+/* Sticky notes and their heading follow the note font setting (Aa) */
+.font-handwritten .sticky-note,
+.font-handwritten .notes-panel-hdr,
+.font-handwritten .sticky-add {
+  font-family: "Comic Sans MS", "Bradley Hand", "Segoe Print", cursive, sans-serif;
+}
+.font-sans .sticky-note,
+.font-sans .notes-panel-hdr,
+.font-sans .sticky-add {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+}
+.font-sans .sticky-note { font-size: 11.5px; }
+
+/* Lesson-note formatting */
+.note-mark { background: #fde047; color: inherit; padding: 0 1px; border-radius: 2px; }
+.note-link { color: #1d4ed8; text-decoration: underline; text-underline-offset: 2px; }
+.note-link:hover { color: #1e3a8a; }
+.note-bullet { display: inline-block; min-width: 0.9em; margin-right: 2px; font-weight: 700; }
+
+/* Unit tag in a lesson's corner, with progress on hover */
+.unit-tag {
+  position: relative;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #1d3f7a;
+  color: #fff;
+  font: 700 8.5px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: default;
+}
+.unit-tip {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 200px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font: 500 11px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.3);
+  pointer-events: none;
+}
+.unit-tip strong { color: #fff; }
+.unit-tip-bar { display: block; height: 4px; margin-top: 4px; border-radius: 2px; background: #334155; overflow: hidden; }
+.unit-tip-bar > span { display: block; height: 100%; background: #fbbf24; }
+
+/* Undo / redo beside the sync chip */
+.undo-btn {
+  width: 24px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+.undo-btn:hover:not(:disabled) { background: #f1f5f9; }
+.undo-btn:disabled { color: #cbd5e1; cursor: default; }
+@media print { .undo-btn, .unit-tag .binder-tip { display: none !important; } }
+
+/* Sequences (1/3 → 2/3, 3/3) */
+.seq-prompt {
+  position: fixed;
+  z-index: 56;
+  width: 330px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
+}
+.seq-chip {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  font-weight: 700;
+  font-size: 11px;
+}
+.seq-added { opacity: 0.62; }
+.seq-remove {
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.7);
+  color: #475569;
+  font-size: 8px;
+  cursor: pointer;
+  opacity: 0;
+}
+.tt-slot:hover .seq-remove, .seq-remove:focus-visible { opacity: 1; }
+@media print { .seq-remove { display: none !important; } .seq-added { opacity: 1; } }
+
+/* Notes heading menu and list mode */
+.notes-hdr-btn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.notes-hdr-btn:hover { color: #0f172a; }
+.notes-display-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 40;
+  width: 236px;
+  margin-top: 4px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font: 500 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+.note-list-item {
+  position: relative;
+  padding: 2px 16px 2px 14px;
+  font-size: 12px;
+  line-height: 1.35;
+  flex-shrink: 0;
+}
+.note-list-item::before { content: "•"; position: absolute; left: 2px; font-weight: 700; }
+.note-list-item:hover .sticky-remove { opacity: 1; }
+.notes-panel-body:has(.note-list-item) { gap: 6px; }
+.note-list-add {
+  align-self: flex-start;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: #64748b;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.note-list-add:hover { color: #1d3f7a; }
+.font-handwritten .note-list-item, .font-handwritten .note-list-add {
+  font-family: "Comic Sans MS", "Bradley Hand", "Segoe Print", cursive, sans-serif;
 }

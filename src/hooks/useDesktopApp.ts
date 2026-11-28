@@ -6,13 +6,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AcademicYearBinder } from '../types/planner';
 import type { ResolvedSchedule } from '../engine/cycleEngine';
 import { agendaFor, dueReminders, menuBarText, reminderText } from '../engine/todayAgenda';
-import { getReminderPrefs, useReminderPrefs } from '../store/reminderPrefs';
+import {
+  getReminderPrefs,
+  updateReminderPrefs,
+  useReminderPrefs,
+  type ReminderPrefs,
+} from '../store/reminderPrefs';
+import type { AgendaItem } from '../engine/todayAgenda';
+
+/** "12:20 · P3 Y8 SCI" for the next reminder still to come today, if any. */
+function dueSoon(items: AgendaItem[], nowMin: number, p: ReminderPrefs): string | null {
+  if (!p.enabled) return null;
+  const n = items.find((i) => p.kinds[i.kind] && !p.skips.includes(i.cellKey) && i.startMin - p.leadMin > nowMin);
+  if (!n) return null;
+  const m = n.startMin - p.leadMin;
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} · ${n.periodLabel} ${n.title}`;
+}
 import { todayISO } from '../engine/dateUtils';
 import { getDesktop, type DesktopApi } from '../platform/desktop';
 
 export type NotifyAccess = 'granted' | 'prompt' | 'denied' | 'unsupported';
 
-/** 256 px app icon: navy binder cover, white page, two silver rings, "MV". */
+/** 256 px app icon: navy binder cover, ruled white page, rings, a tilted sticky note, "MV" + orange "P". */
 function drawIcon(): string {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
@@ -27,20 +42,67 @@ function drawIcon(): string {
   rr(16, 16, 224, 224, 50);
   g.fillStyle = cover;
   g.fill();
-  rr(62, 44, 152, 168, 10);
+  // page
+  rr(62, 40, 156, 176, 10);
   g.fillStyle = '#f8f8f5';
   g.fill();
-  g.fillStyle = '#fde68a';
-  g.fillRect(150, 150, 46, 44); // a sticky note
-  for (const y of [92, 164]) {
+  // light grey ruled lines
+  g.strokeStyle = '#d5dae2';
+  g.lineWidth = 2;
+  for (let y = 66; y < 206; y += 14) {
+    g.beginPath();
+    g.moveTo(74, y);
+    g.lineTo(206, y);
+    g.stroke();
+  }
+  // rings
+  for (const y of [88, 168]) {
     rr(40, y - 8, 46, 16, 8);
     g.fillStyle = '#c7ced9';
     g.fill();
   }
+  // tilted sticky note
+  g.save();
+  g.translate(174, 172);
+  g.rotate(-0.16);
+  g.shadowColor = 'rgba(0,0,0,0.25)';
+  g.shadowBlur = 6;
+  g.shadowOffsetY = 3;
+  g.fillStyle = '#fde68a';
+  g.fillRect(-25, -24, 50, 48);
+  g.restore();
+  // MV + orange P
+  g.font = '800 52px -apple-system, system-ui, sans-serif';
+  g.textBaseline = 'alphabetic';
+  const mv = 'MV';
+  const total = g.measureText('MVP').width;
+  const x0 = 140 - total / 2;
   g.fillStyle = '#1d3f7a';
-  g.font = '800 54px -apple-system, system-ui, sans-serif';
-  g.textAlign = 'center';
-  g.fillText('MV', 138, 132);
+  g.fillText(mv, x0, 132);
+  g.fillStyle = '#c2410c';
+  g.fillText('P', x0 + g.measureText(mv).width, 132);
+  return c.toDataURL('image/png');
+}
+
+/** Menu bar item: a small binder, drawn black on transparent (macOS tints it to match the bar). */
+function drawTrayIcon(): string {
+  const c = document.createElement('canvas');
+  c.width = c.height = 36;
+  const g = c.getContext('2d')!;
+  g.strokeStyle = '#000';
+  g.lineWidth = 3;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.roundRect(9, 4, 23, 28, 3);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(15, 4);
+  g.lineTo(15, 32);
+  for (const y of [11, 18, 25]) {
+    g.moveTo(4, y);
+    g.lineTo(9, y);
+  }
+  g.stroke();
   return c.toDataURL('image/png');
 }
 
@@ -144,6 +206,7 @@ export function useDesktopApp(binder: AcademicYearBinder, schedule: ResolvedSche
       if (isApp) desktop?.tray?.remove().catch(() => undefined);
       return;
     }
+    const trayIcon = drawTrayIcon();
     const tick = async () => {
       const { binder: b, schedule: s } = dataRef.current;
       const today = todayISO();
@@ -153,20 +216,28 @@ export function useDesktopApp(binder: AcademicYearBinder, schedule: ResolvedSche
       const p = getReminderPrefs();
 
       if (wantsMenuBar) {
+        const shown = items.filter((i) => i.kind !== 'free');
+        const nextIdx = shown.findIndex((i) => i.startMin > nowMin);
+        const nextRem = dueSoon(shown, nowMin, p);
+        const day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
         await desktop!.tray
           ?.set({
-            title: menuBarText(items, nowMin),
-            toolTip: 'Today in MVPlanner',
+            icon: trayIcon,
+            toolTip: menuBarText(items, nowMin),
             menu: [
-              ...(items.length
-                ? items
-                    .filter((i) => i.kind !== 'free')
-                    .map((i) => ({
-                      label: `${i.start}  ${i.periodLabel}  ${i.title}${i.note ? ` — ${i.note.slice(0, 40)}` : ''}`,
-                      enabled: false,
-                    }))
+              { label: `Today · ${day}`, enabled: false },
+              ...(shown.length
+                ? shown.map((i, idx) => ({
+                    label: `${idx === nextIdx ? '▸ ' : '   '}${i.start}  ${i.periodLabel}  ${i.title}${i.note ? ` — ${i.note.slice(0, 40)}` : ''}`,
+                    enabled: idx >= nextIdx && nextIdx !== -1,
+                    click: () => void desktop!.window?.show(),
+                  }))
                 : [{ label: 'No lessons today', enabled: false }]),
               { type: 'separator' as const },
+              ...(nextRem ? [{ label: `Next reminder ${nextRem}`, enabled: false }] : []),
+              p.pausedOn === today
+                ? { label: 'Resume reminders today', click: () => updateReminderPrefs({ pausedOn: null }) }
+                : { label: 'Pause reminders for today', click: () => updateReminderPrefs({ pausedOn: today }) },
               { label: 'Open MVPlanner', click: () => void desktop!.window?.show() },
             ],
           })
