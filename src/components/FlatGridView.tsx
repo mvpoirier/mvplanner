@@ -38,7 +38,7 @@ export const FlatGridView: React.FC<FlatGridViewProps> = ({
           {formatWeekHeading(week)} · {week.dateRange}
         </span>
         <span className="text-[10.5px] text-slate-500">
-          Flat Bulk-Edit View · Double-click any cell to edit · {schedule.summary.totalTeachingWeeks} Teaching Weeks Total
+          Flat Bulk-Edit View · Double-click any cell to edit
         </span>
       </div>
       <div className="flat-page-grid">

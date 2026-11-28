@@ -152,8 +152,8 @@ body {
 .corner-curl {
   position: absolute;
   bottom: 0;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   z-index: 24;
   cursor: pointer;
   transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease;
@@ -164,28 +164,30 @@ body {
   left: 0;
   background: linear-gradient(
     45deg,
-    rgba(15, 23, 42, 0.16) 0%,
-    rgba(15, 23, 42, 0.06) 45%,
-    #f1efe8 50%,
+    rgba(15, 23, 42, 0.30) 0%,
+    rgba(15, 23, 42, 0.12) 44%,
+    #e4e1d8 50%,
     #ffffff 52%,
     transparent 54%
   );
   border-radius: 0 10px 0 3px;
-  opacity: 0.52;
+  opacity: 0.9;
+  filter: drop-shadow(1px -1px 1.5px rgba(0, 0, 0, 0.18));
 }
 
 .corner-curl-next {
   right: 0;
   background: linear-gradient(
     315deg,
-    rgba(15, 23, 42, 0.16) 0%,
-    rgba(15, 23, 42, 0.06) 45%,
-    #f1efe8 50%,
+    rgba(15, 23, 42, 0.30) 0%,
+    rgba(15, 23, 42, 0.12) 44%,
+    #e4e1d8 50%,
     #ffffff 52%,
     transparent 54%
   );
   border-radius: 10px 0 3px 0;
-  opacity: 0.52;
+  opacity: 0.9;
+  filter: drop-shadow(-1px -1px 1.5px rgba(0, 0, 0, 0.18));
 }
 
 .corner-curl:hover,
@@ -336,7 +338,7 @@ body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 73% 27%;
+  grid-template-columns: 71% 29%;
   align-items: stretch;
 }
 
@@ -352,28 +354,221 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-top: 1.5px solid #2b2f36;
-  border-right: 1.5px solid #2b2f36;
-  border-bottom: 1.5px solid #2b2f36;
-  background: #f5f5f3;
+  padding-left: 10px;
 }
 
 .notes-panel-hdr {
   height: 24px;
-  background: #e8eaed;
-  border-bottom: 1px solid #484e57;
-  font-size: 10.5px;
+  font-family: "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+  font-size: 15px;
   font-weight: 700;
+  color: #334155;
   display: flex;
   align-items: center;
-  justify-content: center;
   flex-shrink: 0;
 }
 
 .notes-panel-body {
   flex: 1;
-  padding: 6px;
+  min-height: 0;
+  padding: 8px 6px 14px 4px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sticky-note {
+  position: relative;
+  padding: 12px 10px 12px;
+  min-height: 62px;
+  font-family: "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+  font-size: 12px;
+  line-height: 1.3;
+  box-shadow: 0 6px 9px -5px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.06);
+  cursor: default;
+  flex-shrink: 0;
+}
+.sticky-note::before { /* strip of tape */
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 44px;
+  height: 13px;
+  margin-left: -22px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.15);
+  transform: rotate(-3deg);
+}
+.sticky-yellow { background: #fff59d; }
+.sticky-pink   { background: #f8c9dc; }
+.sticky-green  { background: #cdeccd; }
+.sticky-blue   { background: #d3e5fb; }
+
+.sticky-remove {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 10px;
+  color: rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  cursor: pointer;
+}
+.sticky-note:hover .sticky-remove { opacity: 1; }
+.sticky-remove:hover { color: #b91c1c; }
+
+.sticky-textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font: inherit;
+}
+.sticky-btn {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: #475569;
+  cursor: pointer;
+}
+.sticky-btn:hover { background: rgba(0, 0, 0, 0.06); }
+.sticky-btn-primary { background: #1d3f7a; color: #fff; }
+.sticky-btn-primary:hover { background: #163262; }
+
+.sticky-add {
+  flex-shrink: 0;
+  min-height: 46px;
+  border: 1.5px dashed #b8c2d0;
+  background: transparent;
+  font-family: "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  transform: rotate(0.8deg);
+}
+.sticky-add:hover { background: rgba(255, 245, 157, 0.35); color: #334155; }
+
+/* Header bar: week progress, search, sync status */
+.week-progress {
+  display: inline-block;
+  width: 84px;
+  height: 4px;
+  border-radius: 2px;
+  background: #dfe3ea;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.week-progress > span { display: block; height: 100%; background: #1d3f7a; border-radius: 2px; }
+
+.binder-search { position: relative; }
+.binder-search-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  width: 230px;
+  padding: 0 6px 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  cursor: text;
+}
+.binder-search-pill:focus-within { border-color: #1d3f7a; box-shadow: 0 0 0 3px rgba(29, 63, 122, 0.15); }
+.binder-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 11px;
+  color: #0f172a;
+}
+.binder-search-kbd {
+  font: 600 9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.binder-search-results {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  width: 360px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.22);
+  z-index: 60;
+}
+
+.sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 62%;
+  height: 19px;
+  padding: 0 9px;
+  border-radius: 10px;
+  border: 1px solid;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sync-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+.sync-chip-ok    { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+.sync-chip-ok .sync-chip-dot { background: #10b981; }
+.sync-chip-busy  { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+.sync-chip-busy .sync-chip-dot { background: #3b82f6; animation: sync-pulse 1.2s ease-in-out infinite; }
+.sync-chip-warn  { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+.sync-chip-error { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+.sync-chip-idle  { background: #f8fafc; border-color: #e2e8f0; color: #475569; }
+.sync-chip-idle .sync-chip-dot { background: #94a3b8; }
+@keyframes sync-pulse { 50% { opacity: 0.35; } }
+
+/* Today ribbon: tucked over the top edge of today's column like a bookmark */
+.tt-hdr-top.is-today { overflow: visible !important; position: relative; }
+.today-ribbon { display: none; }
+.paper-sheet .today-ribbon {
+  display: block;
+  position: absolute;
+  top: -5px;
+  right: 7px;
+  width: 11px;
+  height: 34px;
+  background: linear-gradient(90deg, #b83a0b, #d9541a 55%, #b83a0b);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  pointer-events: none;
+  z-index: 5;
+}
+/* When today isn't on this spread, a small ribbon peeks over the page top: click to go there */
+.today-ribbon-peek {
+  position: absolute;
+  top: 0;
+  left: 46%;
+  width: 20px;
+  height: 38px;
+  padding-top: 4px;
+  writing-mode: vertical-rl;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: linear-gradient(90deg, #b83a0b, #d9541a 55%, #b83a0b);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%);
+  cursor: pointer;
+  z-index: 26;
+  transition: height 0.15s ease;
+}
+.today-ribbon-peek:hover { height: 46px; }
+
+@media print {
+  .today-ribbon, .today-ribbon-peek, .binder-search, .sync-chip, .week-progress { display: none !important; }
 }
 
 /* Pixel-locked full-height timetable table */
@@ -598,21 +793,21 @@ body {
 
 .binder-tabs {
   position: absolute;
-  right: -28px;
-  top: 42px;
+  right: -27px;
+  top: 44px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  z-index: 20;
+  gap: 5px;
+  z-index: -1; /* behind the cover: the tab roots disappear under its edge */
 }
 
 .binder-tab {
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  padding: 7px 4px;
-  font-size: 9.5px;
+  padding: 9px 5px 9px 9px;
+  font-size: 10.5px;
   font-weight: 700;
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 8px 8px 0;
   cursor: pointer;
   border: 1px solid rgba(0, 0, 0, 0.18);
   border-left: none;
@@ -621,7 +816,7 @@ body {
 }
 
 .binder-tab:hover { transform: translateX(3px); }
-.binder-tab.active { transform: translateX(5px); box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.32); }
+.binder-tab.active { transform: translateX(7px); box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.32); }
 
 .callout-chip {
   font-size: 10px;

@@ -9,6 +9,7 @@ import {
   Menu,
   Redo2,
   SlidersHorizontal,
+  CalendarPlus,
   Sparkles,
   Undo2,
   X,
@@ -55,6 +56,7 @@ interface SidePanelProps {
   onOpenShelf: () => void;
   onOpenWizard: () => void;
   onOpenSetup: () => void;
+  onOpenCalendarImport: () => void;
   onOpenExport: () => void;
   fileSyncStatus: FileSyncStatus;
   fileSyncName: string | null;
@@ -86,6 +88,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onOpenShelf,
   onOpenWizard,
   onOpenSetup,
+  onOpenCalendarImport,
   onOpenExport,
   fileSyncStatus,
   fileSyncName,
@@ -369,6 +372,18 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" />
               Holidays &amp; Recurring Rules
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenCalendarImport();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-800 cursor-pointer"
+            >
+              <CalendarPlus className="w-3.5 h-3.5 text-slate-600" />
+              Import School Calendar (.ics / .csv)
             </button>
 
             <button

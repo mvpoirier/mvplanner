@@ -81,6 +81,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
             const d = week.days[di];
             return (
               <th key={d.iso} className={`tt-hdr-top${d.iso === today ? ' is-today' : ''}`}>
+                {d.iso === today && <span className="today-ribbon" title="Today" aria-hidden="true" />}
                 {d.dow}
                 {d.classification.bellLabel && (
                   <span
@@ -357,22 +358,40 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
     }
   };
 
+  const STICKY = ['sticky-yellow', 'sticky-pink', 'sticky-green', 'sticky-blue'];
+  const TILT = ['-1.6deg', '1.2deg', '-0.8deg', '1.6deg'];
+  const inkClass = (t: InkTone) => (t === 'red' ? 'ink-red' : t === 'blue' ? 'ink-blue' : 'ink-pencil');
+
+  const inkPicker = (value: InkTone, onChange: (t: InkTone) => void) => (
+    <div className="flex items-center gap-1">
+      {(['pencil', 'blue', 'red'] as InkTone[]).map((tone) => (
+        <button
+          key={tone}
+          type="button"
+          onClick={() => onChange(tone)}
+          className={`w-3.5 h-3.5 rounded-full border cursor-pointer ${
+            tone === 'pencil' ? 'bg-[#3a3f47]' : tone === 'blue' ? 'bg-[#1648a8]' : 'bg-[#c02323]'
+          } ${value === tone ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
+          aria-label={`${tone} ink`}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <div className="notes-panel">
-      <div className="notes-panel-hdr">NOTES</div>
-      <div className="notes-panel-body space-y-1.5">
-        {notes.map((n) => {
-          const inkCls =
-            n.ink === 'red' ? 'ink-red' : n.ink === 'blue' ? 'ink-blue' : 'ink-pencil';
-
+      <div className="notes-panel-hdr">Notes</div>
+      <div className="notes-panel-body">
+        {notes.map((n, i) => {
+          const look = { transform: `rotate(${TILT[i % TILT.length]})` };
           if (editingId === n.id) {
             return (
-              <div key={n.id} className="p-1 rounded border border-blue-400 bg-white space-y-1">
+              <div key={n.id} className={`sticky-note ${STICKY[i % STICKY.length]}`} style={look}>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={editDraft}
                   onChange={(e) => setEditDraft(e.target.value)}
-                  className="w-full text-[10px] border border-slate-200 rounded p-1 focus:outline-none"
+                  className={`sticky-textarea ${inkClass(n.ink)}`}
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') setEditingId(null);
@@ -382,12 +401,8 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
                     }
                   }}
                 />
-                <div className="flex justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(null)}
-                    className="text-[9.5px] px-1.5 py-0.5 text-slate-500 cursor-pointer"
-                  >
+                <div className="flex justify-end gap-1 mt-1">
+                  <button type="button" onClick={() => setEditingId(null)} className="sticky-btn">
                     Cancel
                   </button>
                   <button
@@ -396,7 +411,7 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
                       if (editDraft.trim()) updateWeeklyNote(week.mondayIso, n.id, editDraft.trim());
                       setEditingId(null);
                     }}
-                    className="text-[9.5px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold cursor-pointer"
+                    className="sticky-btn sticky-btn-primary"
                   >
                     Save
                   </button>
@@ -404,25 +419,25 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
               </div>
             );
           }
-
           return (
             <div
               key={n.id}
-              className={`callout-chip group relative pr-4 cursor-pointer ${inkCls}`}
+              className={`sticky-note group ${STICKY[i % STICKY.length]} ${inkClass(n.ink)}`}
+              style={look}
               onDoubleClick={() => {
                 if (binder.archived) return;
                 setEditingId(n.id);
                 setEditDraft(n.text);
               }}
-              title="Double-click to edit note"
+              title="Double-click to edit"
             >
-              <span>{n.text}</span>
+              <span className="whitespace-pre-wrap break-words">{n.text}</span>
               {!binder.archived && (
                 <button
                   type="button"
                   onClick={() => deleteWeeklyNote(week.mondayIso, n.id)}
-                  className="opacity-0 group-hover:opacity-100 absolute right-1 top-0.5 text-[9px] text-slate-400 hover:text-red-600 cursor-pointer"
-                  title="Remove note"
+                  className="sticky-remove"
+                  aria-label="Remove note"
                 >
                   ✕
                 </button>
@@ -433,62 +448,34 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
 
         {!binder.archived &&
           (adding ? (
-            <div className="p-1.5 rounded border border-slate-300 bg-white space-y-1.5">
+            <div className={`sticky-note ${STICKY[notes.length % STICKY.length]}`}>
               <textarea
-                rows={2}
+                rows={3}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Weekly note or reminder…"
-                className="w-full text-[10px] border border-slate-200 rounded p-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Reminder for this week…"
+                className={`sticky-textarea ${inkClass(ink)}`}
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSave();
                   if (e.key === 'Escape') setAdding(false);
                 }}
               />
-              <div className="flex items-center justify-between gap-1">
-                <div className="flex items-center gap-1">
-                  {(['pencil', 'blue', 'red'] as InkTone[]).map((tone) => (
-                    <button
-                      key={tone}
-                      type="button"
-                      onClick={() => setInk(tone)}
-                      className={`w-3.5 h-3.5 rounded-full border cursor-pointer ${
-                        tone === 'pencil'
-                          ? 'bg-[#3a3f47]'
-                          : tone === 'blue'
-                            ? 'bg-[#1648a8]'
-                            : 'bg-[#c02323]'
-                      } ${ink === tone ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
-                      title={`${tone} ink`}
-                    />
-                  ))}
-                </div>
+              <div className="flex items-center justify-between gap-1 mt-1">
+                {inkPicker(ink, setInk)}
                 <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setAdding(false)}
-                    className="text-[9.5px] px-1.5 py-0.5 rounded text-slate-500 hover:bg-slate-100 cursor-pointer"
-                  >
+                  <button type="button" onClick={() => setAdding(false)} className="sticky-btn">
                     Cancel
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    className="text-[9.5px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 cursor-pointer"
-                  >
-                    Add
+                  <button type="button" onClick={handleSave} className="sticky-btn sticky-btn-primary">
+                    Stick
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="w-full mt-1 py-1 px-2 text-[10px] font-semibold rounded border border-dashed border-slate-400 text-slate-600 hover:bg-slate-200/70 cursor-pointer"
-            >
-              + Add weekly note
+            <button type="button" onClick={() => setAdding(true)} className="sticky-add">
+              + stick a note
             </button>
           ))}
       </div>
