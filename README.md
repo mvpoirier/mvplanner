@@ -55,6 +55,12 @@ The same app is also published as a Claude artifact that can be installed as a M
 
 Build it with `npm run build:app` (relative asset paths, output in `dist-app/`). The permissions it asks for are listed in the `claude-artifacts-manifest` tag in `index.html`.
 
+### Versions and roadmap
+
+Current version: **1.4.0** (shown at the bottom of the ☰ menu). See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
+
+**Next milestone, v2.0:** native, unsigned **macOS (.dmg)** and **Android (.apk)** apps from this codebase, downloadable from GitHub Releases (no app stores), plus optional **Google Drive sync** using the narrow `drive.file` / `drive.appdata` scopes.
+
 ### Deployment
 
 Every push to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes `dist/` to GitHub Pages.

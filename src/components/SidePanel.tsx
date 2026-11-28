@@ -473,6 +473,16 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           <div className="rounded-lg bg-slate-50 border border-slate-200/80 p-2.5 text-[10.5px] text-slate-500 leading-relaxed">
             <strong>Quick Tips:</strong> Double-click any cell or note to edit inline. Click the outer page edges/corners (or press <kbd className="px-1 rounded bg-white border border-slate-300">←</kbd>/<kbd className="px-1 rounded bg-white border border-slate-300">→</kbd>) to turn pages.
           </div>
+
+          <a
+            href="https://github.com/mvpoirier/mvplanner/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-center text-[10.5px] text-slate-400 hover:text-slate-600"
+            title="What's new"
+          >
+            MVPlanner v{__APP_VERSION__}
+          </a>
         </div>
       </aside>
     </>
