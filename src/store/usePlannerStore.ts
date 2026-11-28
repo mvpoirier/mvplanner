@@ -10,6 +10,7 @@ import {
   type CellPlan,
   type InkTone,
   type NoteFontMode,
+  type BindingStyle,
   type PaperSize,
   type PlannerWorkspace,
   type ViewMode,
@@ -71,6 +72,7 @@ interface PlannerState {
   setCoverTheme: (theme: BinderCoverTheme) => void;
   setNoteFont: (font: NoteFontMode) => void;
   setPaperSize: (size: PaperSize) => void;
+  setBinding: (binding: BindingStyle) => void;
   setNotesDisplay: (patch: Partial<NotesDisplay>) => void;
   showToast: (msg: string) => void;
 
@@ -252,6 +254,15 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     schedulePersist(next, get().lockPassphrase);
   },
 
+  setBinding: (binding) => {
+    const next: PlannerWorkspace = {
+      ...get().workspace,
+      uiPreferences: { ...get().workspace.uiPreferences, binding },
+      updatedAt: new Date().toISOString(),
+    };
+    set({ workspace: next, dirtyRevision: get().dirtyRevision + 1 });
+    schedulePersist(next, get().lockPassphrase);
+  },
   setNoteFont: (noteFont) => {
     const next: PlannerWorkspace = {
       ...get().workspace,

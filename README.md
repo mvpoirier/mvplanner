@@ -61,6 +61,8 @@ Current version: **1.4.0** (shown at the bottom of the ☰ menu). See [CHANGELOG
 
 **Next milestone, v2.0:** native, unsigned **macOS (.dmg)** and **Android (.apk)** apps from this codebase, downloadable from GitHub Releases (no app stores), plus optional **Google Drive sync** using the narrow `drive.file` / `drive.appdata` scopes.
 
+**Releasing:** bump `version` in `package.json`, move the *Unreleased* notes in `CHANGELOG.md` under a matching `## [x.y.z]` heading, and merge to `main`. The Release workflow tags that commit and publishes the GitHub Release with those notes.
+
 ### Deployment
 
 Every push to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes `dist/` to GitHub Pages.

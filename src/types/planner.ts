@@ -4,6 +4,8 @@ export type InkTone = 'pencil' | 'blue' | 'red';
 export type NoteFontMode = 'handwritten' | 'sans';
 export type BinderCoverTheme = 'nist-blue' | 'charcoal' | 'forest' | 'burgundy' | 'linen';
 export type PaperSize = 'A4' | 'LETTER';
+/** How the on-screen spread is bound: a stitched notebook, or a 2- or 3-ring binder. */
+export type BindingStyle = 'notebook' | 'ring2' | 'ring3';
 export type ViewMode = 'binder' | 'flat' | 'phone';
 
 export type ExceptionBehavior =
@@ -145,6 +147,8 @@ export interface PlannerWorkspace {
     noteFont: NoteFontMode;
     paperSize: PaperSize;
     notesDisplay?: NotesDisplay;
+    /** Missing = 'ring2' (the original look). */
+    binding?: BindingStyle;
   };
   /** @deprecated Google Drive sync was removed; kept so older saved workspaces still load. */
   googleSync?: {
