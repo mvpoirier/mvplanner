@@ -17,6 +17,15 @@ import { FileSyncDrawer } from './components/FileSyncDrawer';
 import { SearchBox } from './components/SearchBox';
 import { CalendarImportModal } from './components/CalendarImportModal';
 import { RemindersDrawer } from './components/RemindersDrawer';
+import { SequencePrompt } from './components/SequencePrompt';
+import { UnitPlannerModal } from './components/UnitPlannerModal';
+import { findSequenceStart } from './engine/richText';
+import {
+  fillSequence,
+  removeUnit,
+  removeWholeSequence,
+  sequenceAlreadyFilled,
+} from './engine/unitsAndSequences';
 import { SyncStatusChip } from './components/SyncStatusChip';
 import type { SearchHit } from './engine/search';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
@@ -49,6 +58,7 @@ export default function App() {
   const setCoverTheme = usePlannerStore((s) => s.setCoverTheme);
   const setNoteFont = usePlannerStore((s) => s.setNoteFont);
   const undo = usePlannerStore((s) => s.undo);
+  const updateActiveBinder = usePlannerStore((s) => s.updateActiveBinder);
   const redo = usePlannerStore((s) => s.redo);
   const showToast = usePlannerStore((s) => s.showToast);
 
@@ -62,6 +72,9 @@ export default function App() {
   const [fileSyncOpen, setFileSyncOpen] = useState(false);
   const [calendarImportOpen, setCalendarImportOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
+  const [unitPlanner, setUnitPlanner] = useState<{ courseId: string; startKey: string } | null>(null);
+  const [seqMake, setSeqMake] = useState(false);
+  const [seqDismissed, setSeqDismissed] = useState<Set<string>>(() => new Set());
   const fileSync = useLocalFileSync();
   const fileSyncSaveNow = fileSync.saveNow;
 
@@ -191,7 +204,7 @@ export default function App() {
     const onDocClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement | null;
       if (!el) return;
-      if (el.closest('.tt-slot.editing') || el.closest('.floating-toolbar')) return;
+      if (el.closest('.tt-slot.editing') || el.closest('.floating-toolbar') || el.closest('.seq-prompt')) return;
       finishEditingCell();
     };
     document.addEventListener('mousedown', onDocClick);
@@ -311,6 +324,52 @@ export default function App() {
     setSelectedCell({ date, periodId });
     setActiveEdit({ date, periodId, rect });
   };
+
+  // ----- Sequences & units for the lesson being edited -----
+  const editKey = activeEdit ? `${activeEdit.date}__${activeEdit.periodId}` : null;
+  const editPlan = editKey ? activeBinder.cellPlans[editKey] : undefined;
+  const editCourseId = (() => {
+    if (!activeEdit) return null;
+    const day = schedule.daysByIso[activeEdit.date];
+    const period = activeBinder.periods.find((p) => p.id === activeEdit.periodId);
+    return day && period ? resolveSlot(activeBinder, day, period).courseId ?? null : null;
+  })();
+  const seqStart = editPlan && !editPlan.seqFrom ? findSequenceStart(editPlan.text) : null;
+  const showSeqPrompt =
+    !!editKey &&
+    !!editCourseId &&
+    (seqMake ||
+      (!!seqStart && !sequenceAlreadyFilled(activeBinder, editKey) && !seqDismissed.has(`${editKey}|${seqStart.line}`)));
+  const addSequence = (total: number) => {
+    if (!editKey || !editCourseId) return;
+    updateActiveBinder((b) => {
+      const plan = b.cellPlans[editKey] ?? { text: '', ink: 'pencil' as const };
+      let text = plan.text;
+      let rest = seqStart?.rest ?? '';
+      if (seqMake || !seqStart) {
+        const [first, ...others] = text.split('\n');
+        rest = first.trim();
+        text = [`1/${total} ${rest}`, ...others].join('\n');
+      }
+      const withSource = { ...b, cellPlans: { ...b.cellPlans, [editKey]: { ...plan, text } } };
+      return { ...withSource, cellPlans: fillSequence(withSource, editCourseId, editKey, total, rest) };
+    });
+    setSeqMake(false);
+  };
+  const extraUnitItems: { label: string; onClick: () => void }[] = [];
+  if (editKey && sequenceAlreadyFilled(activeBinder, editKey)) {
+    extraUnitItems.push({
+      label: 'Remove the lines this 1/N added',
+      onClick: () => updateActiveBinder((b) => ({ ...b, cellPlans: removeWholeSequence(b, editKey) })),
+    });
+  }
+  if (editPlan?.seqFrom) {
+    const src = editPlan.seqFrom;
+    extraUnitItems.push({
+      label: 'Remove this whole sequence',
+      onClick: () => updateActiveBinder((b) => ({ ...b, cellPlans: removeWholeSequence(b, src) })),
+    });
+  }
 
   return (
     <div className={`min-h-screen w-full ${fontClass}`}>
@@ -465,6 +524,18 @@ export default function App() {
           week={currentWeek}
           target={activeEdit}
           onDone={finishEditingCell}
+          onPlanUnit={() => {
+            if (editCourseId && editKey) {
+              setUnitPlanner({ courseId: editCourseId, startKey: editKey });
+              finishEditingCell();
+            }
+          }}
+          onMakeSequence={() => setSeqMake(true)}
+          onRemoveUnit={() => {
+            const id = editPlan?.unit?.id;
+            if (id) updateActiveBinder((b) => removeUnit(b, id));
+          }}
+          extraUnitItems={extraUnitItems}
         />
       )}
 
@@ -486,6 +557,35 @@ export default function App() {
         schedule={schedule}
       />
 
+
+      {activeEdit && showSeqPrompt && editKey && editCourseId && (
+        <SequencePrompt
+          key={`${editKey}-${seqMake ? 'make' : seqStart?.total}`}
+          binder={activeBinder}
+          schedule={schedule}
+          courseId={editCourseId}
+          fromKey={editKey}
+          total={seqMake ? null : (seqStart?.total ?? null)}
+          anchor={{
+            top: Math.min(activeEdit.rect.bottom + 6, window.innerHeight - 230),
+            left: Math.min(activeEdit.rect.left, window.innerWidth - 350),
+          }}
+          onAdd={addSequence}
+          onDismiss={() => {
+            if (seqMake) setSeqMake(false);
+            else if (seqStart) setSeqDismissed((d) => new Set(d).add(`${editKey}|${seqStart.line}`));
+          }}
+        />
+      )}
+
+      <UnitPlannerModal
+        open={!!unitPlanner}
+        onClose={() => setUnitPlanner(null)}
+        binder={activeBinder}
+        schedule={schedule}
+        courseId={unitPlanner?.courseId ?? null}
+        startKey={unitPlanner?.startKey ?? null}
+      />
 
       <RemindersDrawer
         open={remindersOpen}

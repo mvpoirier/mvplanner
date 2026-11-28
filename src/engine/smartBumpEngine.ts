@@ -56,8 +56,9 @@ export function listValidCourseSlots(
   return slots;
 }
 
+/** Empty = no note and not part of a unit (unit tags travel with Bump like text does). */
 function isPlanEmpty(plan: CellPlan | undefined): boolean {
-  return !plan || plan.text.trim() === '';
+  return !plan || (plan.text.trim() === '' && !plan.unit);
 }
 
 /**

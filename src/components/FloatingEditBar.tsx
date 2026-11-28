@@ -25,6 +25,8 @@ interface FloatingEditBarProps {
   onPlanUnit?: () => void;
   onMakeSequence?: () => void;
   onRemoveUnit?: () => void;
+  /** Extra Unit-menu items, e.g. removing a sequence's added lines. */
+  extraUnitItems?: { label: string; onClick: () => void }[];
 }
 
 const INKS: [InkTone, string, string][] = [
@@ -67,6 +69,7 @@ export const FloatingEditBar: React.FC<FloatingEditBarProps> = ({
   onPlanUnit,
   onMakeSequence,
   onRemoveUnit,
+  extraUnitItems = [],
 }) => {
   const updateCellPlan = usePlannerStore((s) => s.updateCellPlan);
   const bumpCourseForward = usePlannerStore((s) => s.bumpCourseForward);
@@ -327,6 +330,11 @@ export const FloatingEditBar: React.FC<FloatingEditBarProps> = ({
                 Remove U{binder.units[plan.unit.id].number} from its lessons
               </button>
             )}
+            {extraUnitItems.map((x) => (
+              <button key={x.label} type="button" className={`${item} text-slate-500`} onClick={() => { setOpen(null); x.onClick(); }}>
+                {x.label}
+              </button>
+            ))}
           </div>
         )}
       </span>

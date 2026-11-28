@@ -15,6 +15,7 @@ import { toggleReminderSkip, useReminderPrefs } from '../store/reminderPrefs';
 import { continueList, toggleWrap } from '../engine/richText';
 import { editActiveTextarea } from './FloatingEditBar';
 import { RichLine } from './RichText';
+import { removeSequenceLine } from '../engine/unitsAndSequences';
 import { UnitTag } from './UnitTag';
 import { usePlannerStore, type SelectedCell } from '../store/usePlannerStore';
 
@@ -55,6 +56,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
   onTabEdit,
 }) => {
   const updateCellPlan = usePlannerStore((s) => s.updateCellPlan);
+  const updateActiveBinder = usePlannerStore((s) => s.updateActiveBinder);
   const inlineRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -289,6 +291,22 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                           >
                             <span>{slot.course.code}</span>
                             <span className="flex items-center gap-1">
+                              {plan?.seqFrom && !binder.archived && (
+                                <button
+                                  type="button"
+                                  className="seq-remove"
+                                  title={`Added from the 1/N on ${plan.seqFrom.slice(0, 10)} — click to remove`}
+                                  aria-label="Remove this added sequence line"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const key = cellKey(day.iso, period.id);
+                                    updateActiveBinder((b) => ({ ...b, cellPlans: removeSequenceLine(b, key) }));
+                                  }}
+                                  onDoubleClick={(e) => e.stopPropagation()}
+                                >
+                                  ✕
+                                </button>
+                              )}
                               {plan?.unit && binder.units?.[plan.unit.id] && (
                                 <UnitTag binder={binder} unit={plan.unit} />
                               )}
@@ -350,6 +368,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                                 inkClass,
                                 plan?.circled && i === 0 ? 'marker-circled' : '',
                                 plan?.strike ? 'marker-strike' : '',
+                                plan?.seqFrom && i === 0 ? 'seq-added' : '',
                               ]
                                 .filter(Boolean)
                                 .join(' ');
