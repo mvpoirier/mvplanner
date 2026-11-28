@@ -24,6 +24,13 @@ Live deployment: **https://mvpoirier.github.io/mvplanner/**
   6. RFC 5545 Calendar Feed (`.ics`) & Standalone Offline HTML / Markdown Archive
 
 - **Import School Calendar**: Load holidays, no-school days and events from an `.ics` file (Google / Apple / Outlook Calendar, or the school website) or a `.csv` (`date,end_date,type,label`). Preview shows what's new versus already in the binder; *No school* pauses the cycle, *Event* adds a banner.
+- **Lesson editor**: Ink (black/blue/red), Style (bold ⌘B, italic ⌘I, strikethrough ⌘⇧X, highlight ⌘⇧H, circle, star), bulleted/numbered lists, links, Unit and Bump menus. Esc or ⌘↵ closes; Tab / ⇧Tab saves and jumps to the next / previous lesson. Formatting is stored as light markup (`**bold**`, `==highlight==`, `[text](url)`…).
+- **Bump**: text to the next lesson (default), text to the next blank lesson, or move all lessons from here.
+- **Sequences**: start a line with `1/3` and MVPlanner offers to add `2/3` and `3/3` to the class's next lessons (✕ removes one).
+- **Unit planner** (Unit ▾ → Plan a unit): tags a class's next lessons `U2 L1…L8`, skipping holidays, with optional titles; hover a tag for progress. Tags move with Bump.
+- **Notes**: click the Notes heading for one colour (light yellow by default), your own palette, or a bulleted list. Notes follow the Aa note font.
+- **Demo Timetable**: first-time visitors see made-up classes with one week filled in that explains the app; other weeks show a card to start the setup wizard or open a sync file.
+- **Phones**: landscape shows the binder, portrait the phone view (lock it in ☰ → Phone layout).
 - **Reminders (on by default)**: a notification 10 minutes before each class, duty, meeting/event and ECA (5 / 10 / 15 min or at start; choose which kinds). Never on no-school days; right-click a lesson → no reminder for that one; pause for today. On the website they arrive while a tab is open; the Mac app reminds you in the background.
 - **Search (⌘K / Ctrl+K)**: Find lesson notes, weekly notes, courses, events and holidays across the year and jump straight to that week.
 - **Linked Sync File (no sign-in)**: Link a `mvplanner-workspace.json` file inside a folder that OneDrive, Dropbox, iCloud or Google Drive for desktop already syncs. Every edit saves to it automatically; on open (and whenever you return to the tab) MVPlanner loads newer changes from your other computers, and asks which copy to keep if both changed. No accounts or sign-in, so school sign-in policies can't block it. Chrome/Edge only (File System Access API); other browsers get manual download/open buttons. Encrypted with your passphrase when the lock is on.

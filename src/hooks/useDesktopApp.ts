@@ -219,7 +219,7 @@ export function useDesktopApp(binder: AcademicYearBinder, schedule: ResolvedSche
         const shown = items.filter((i) => i.kind !== 'free');
         const nextIdx = shown.findIndex((i) => i.startMin > nowMin);
         const nextRem = dueSoon(shown, nowMin, p);
-        const day = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+        const day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
         await desktop!.tray
           ?.set({
             icon: trayIcon,
