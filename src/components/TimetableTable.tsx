@@ -8,6 +8,7 @@ import {
   type AcademicYearBinder,
   type InkTone,
   type PeriodRow,
+  DEFAULT_NOTES_DISPLAY,
 } from '../types/planner';
 import { resolveSlot, type ResolvedWeek } from '../engine/cycleEngine';
 import { todayISO } from '../engine/dateUtils';
@@ -15,6 +16,7 @@ import { toggleReminderSkip, useReminderPrefs } from '../store/reminderPrefs';
 import { continueList, toggleWrap } from '../engine/richText';
 import { editActiveTextarea } from './FloatingEditBar';
 import { RichLine } from './RichText';
+import { NotesHeading } from './NotesHeading';
 import { removeSequenceLine } from '../engine/unitsAndSequences';
 import { UnitTag } from './UnitTag';
 import { usePlannerStore, type SelectedCell } from '../store/usePlannerStore';
@@ -404,6 +406,7 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
   const addWeeklyNote = usePlannerStore((s) => s.addWeeklyNote);
   const updateWeeklyNote = usePlannerStore((s) => s.updateWeeklyNote);
   const deleteWeeklyNote = usePlannerStore((s) => s.deleteWeeklyNote);
+  const notesDisplay = usePlannerStore((s) => s.workspace.uiPreferences.notesDisplay ?? DEFAULT_NOTES_DISPLAY);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [ink, setInk] = useState<InkTone>('blue');
@@ -420,8 +423,19 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
     }
   };
 
-  const STICKY = ['sticky-yellow', 'sticky-pink', 'sticky-green', 'sticky-blue'];
   const TILT = ['-1.6deg', '1.2deg', '-0.8deg', '1.6deg'];
+  const isList = notesDisplay.mode === 'list';
+  const noteClass = isList ? 'note-list-item' : 'sticky-note';
+  const lookFor = (i: number): React.CSSProperties =>
+    isList
+      ? {}
+      : {
+          transform: `rotate(${TILT[i % TILT.length]})`,
+          background:
+            notesDisplay.mode === 'palette'
+              ? notesDisplay.palette[i % notesDisplay.palette.length]
+              : notesDisplay.color,
+        };
   const inkClass = (t: InkTone) => (t === 'red' ? 'ink-red' : t === 'blue' ? 'ink-blue' : 'ink-pencil');
 
   const inkPicker = (value: InkTone, onChange: (t: InkTone) => void) => (
@@ -442,13 +456,13 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
 
   return (
     <div className="notes-panel">
-      <div className="notes-panel-hdr">Notes</div>
+      <NotesHeading />
       <div className="notes-panel-body">
         {notes.map((n, i) => {
-          const look = { transform: `rotate(${TILT[i % TILT.length]})` };
+          const look = lookFor(i);
           if (editingId === n.id) {
             return (
-              <div key={n.id} className={`sticky-note ${STICKY[i % STICKY.length]}`} style={look}>
+              <div key={n.id} className={noteClass} style={look}>
                 <textarea
                   rows={3}
                   value={editDraft}
@@ -484,7 +498,7 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
           return (
             <div
               key={n.id}
-              className={`sticky-note group ${STICKY[i % STICKY.length]} ${inkClass(n.ink)}`}
+              className={`${noteClass} group ${inkClass(n.ink)}`}
               style={look}
               onDoubleClick={() => {
                 if (binder.archived) return;
@@ -510,7 +524,7 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
 
         {!binder.archived &&
           (adding ? (
-            <div className={`sticky-note ${STICKY[notes.length % STICKY.length]}`}>
+            <div className={noteClass} style={lookFor(notes.length)}>
               <textarea
                 rows={3}
                 value={draft}
@@ -536,8 +550,8 @@ export const WeeklyNotesPanel: React.FC<NotesPanelProps> = ({ binder, week }) =>
               </div>
             </div>
           ) : (
-            <button type="button" onClick={() => setAdding(true)} className="sticky-add">
-              + stick a note
+            <button type="button" onClick={() => setAdding(true)} className={isList ? 'note-list-add' : 'sticky-add'}>
+              {isList ? '+ add a note' : '+ stick a note'}
             </button>
           ))}
       </div>

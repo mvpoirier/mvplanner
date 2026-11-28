@@ -30,6 +30,7 @@ import { SyncStatusChip } from './components/SyncStatusChip';
 import type { SearchHit } from './engine/search';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
 import { useDesktopApp } from './hooks/useDesktopApp';
+import type { PhoneLayout } from './components/SidePanel';
 import type { PlannerWorkspace } from './types/planner';
 
 export default function App() {
@@ -82,23 +83,55 @@ export default function App() {
   const [flipDir, setFlipDir] = useState<'next' | 'prev' | null>(null);
   const [flipKey, setFlipKey] = useState(0);
 
-  // Phone view only on phone-sized screens (not on a computer, in the browser or in the Mac app)
-  const [isPhone, setIsPhone] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
-  );
+  // Phones only: landscape shows the binder, portrait the phone view (unless locked in ☰).
+  // Computers, browsers and the Mac app never switch to the phone view by themselves.
+  const readPhone = () =>
+    typeof window !== 'undefined' &&
+    window.matchMedia('(pointer: coarse)').matches &&
+    Math.min(window.screen.width, window.screen.height) < 600;
+  const readPortrait = () => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches;
+  const [isPhone, setIsPhone] = useState(readPhone);
+  const [isPortrait, setIsPortrait] = useState(readPortrait);
+  const [phoneLayout, setPhoneLayoutState] = useState<PhoneLayout>(() => {
+    try {
+      return (localStorage.getItem('mvplanner-phone-layout') as PhoneLayout) || 'rotate';
+    } catch {
+      return 'rotate';
+    }
+  });
+  const setPhoneLayout = useCallback((l: PhoneLayout) => {
+    setPhoneLayoutState(l);
+    try {
+      localStorage.setItem('mvplanner-phone-layout', l);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    const on = () => setIsPhone(mq.matches);
+    const mq = window.matchMedia('(orientation: portrait)');
+    const on = () => {
+      setIsPortrait(mq.matches);
+      setIsPhone(readPhone());
+    };
     mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
+    window.addEventListener('resize', on);
+    return () => {
+      mq.removeEventListener('change', on);
+      window.removeEventListener('resize', on);
+    };
   }, []);
   useEffect(() => {
     hydrate();
   }, [hydrate]);
   useEffect(() => {
-    // Phone screens start in phone view (you can still switch); bigger screens never show it.
-    setViewMode(isPhone ? 'phone' : usePlannerStore.getState().viewMode === 'phone' ? 'binder' : usePlannerStore.getState().viewMode);
-  }, [isPhone, setViewMode]);
+    const current = usePlannerStore.getState().viewMode;
+    if (!isPhone) {
+      if (current === 'phone') setViewMode('binder');
+      return;
+    }
+    const want = phoneLayout === 'rotate' ? (isPortrait ? 'phone' : 'binder') : phoneLayout;
+    if (current !== want && !(want === 'binder' && current === 'flat')) setViewMode(want);
+  }, [isPhone, isPortrait, phoneLayout, setViewMode]);
 
   const activeBinder =
     workspace.binders[workspace.activeBinderId] ?? Object.values(workspace.binders)[0];
@@ -404,6 +437,8 @@ export default function App() {
         onOpenShelf={() => setShelfOpen(true)}
         onOpenWizard={() => setWizardOpen(true)}
         isPhone={isPhone}
+        phoneLayout={phoneLayout}
+        onPhoneLayout={setPhoneLayout}
         onOpenSetup={() => setSetupOpen(true)}
         onOpenExport={() => setExportOpen(true)}
         fileSyncStatus={fileSync.status}

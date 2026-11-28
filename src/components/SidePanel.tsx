@@ -27,6 +27,8 @@ import type { FileSyncStatus } from '../hooks/useLocalFileSync';
 import type { DesktopAppControls } from '../hooks/useDesktopApp';
 import { useReminderPrefs } from '../store/reminderPrefs';
 
+export type PhoneLayout = 'rotate' | 'binder' | 'phone';
+
 const COVERS: { id: BinderCoverTheme; bg: string; label: string }[] = [
   { id: 'nist-blue', bg: '#1e4b94', label: 'NIST Blue' },
   { id: 'charcoal', bg: '#2c313b', label: 'Charcoal' },
@@ -60,6 +62,8 @@ interface SidePanelProps {
   onOpenShelf: () => void;
   onOpenWizard: () => void;
   isPhone: boolean;
+  phoneLayout: PhoneLayout;
+  onPhoneLayout: (l: PhoneLayout) => void;
   onOpenSetup: () => void;
   onOpenCalendarImport: () => void;
   onOpenExport: () => void;
@@ -95,6 +99,8 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onOpenShelf,
   onOpenWizard,
   isPhone,
+  phoneLayout,
+  onPhoneLayout,
   onOpenSetup,
   onOpenCalendarImport,
   onOpenExport,
@@ -309,6 +315,20 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                 </button>
               ))}
             </div>
+            {isPhone && (
+              <label className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                Phone layout
+                <select
+                  value={phoneLayout}
+                  onChange={(e) => onPhoneLayout(e.target.value as PhoneLayout)}
+                  className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-800"
+                >
+                  <option value="rotate">Follow rotation</option>
+                  <option value="binder">Always binder</option>
+                  <option value="phone">Always phone view</option>
+                </select>
+              </label>
+            )}
           </div>
 
           {/* Cover Swatches & Font */}

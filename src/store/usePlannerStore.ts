@@ -14,6 +14,8 @@ import {
   type PlannerWorkspace,
   type ViewMode,
   type WeeklyNoteItem,
+  type NotesDisplay,
+  DEFAULT_NOTES_DISPLAY,
 } from '../types/planner';
 import { createInitialWorkspace } from '../presets/demoBinder';
 import { smartBumpForward, type BumpScope } from '../engine/smartBumpEngine';
@@ -69,6 +71,7 @@ interface PlannerState {
   setCoverTheme: (theme: BinderCoverTheme) => void;
   setNoteFont: (font: NoteFontMode) => void;
   setPaperSize: (size: PaperSize) => void;
+  setNotesDisplay: (patch: Partial<NotesDisplay>) => void;
   showToast: (msg: string) => void;
 
   // Cell & note editing
@@ -253,6 +256,18 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     const next: PlannerWorkspace = {
       ...get().workspace,
       uiPreferences: { ...get().workspace.uiPreferences, noteFont },
+      updatedAt: new Date().toISOString(),
+    };
+    set({ workspace: next, dirtyRevision: get().dirtyRevision + 1 });
+    schedulePersist(next, get().lockPassphrase);
+  },
+
+  setNotesDisplay: (patch) => {
+    const ws = get().workspace;
+    const current = ws.uiPreferences.notesDisplay ?? DEFAULT_NOTES_DISPLAY;
+    const next: PlannerWorkspace = {
+      ...ws,
+      uiPreferences: { ...ws.uiPreferences, notesDisplay: { ...current, ...patch } },
       updatedAt: new Date().toISOString(),
     };
     set({ workspace: next, dirtyRevision: get().dirtyRevision + 1 });
