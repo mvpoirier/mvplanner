@@ -2,7 +2,7 @@
 // (OneDrive, Dropbox, iCloud, Google Drive for desktop) already syncs. Falls back to manual
 // download / open buttons in browsers without the File System Access API (Safari, Firefox).
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -38,6 +38,7 @@ export const FileSyncDrawer: React.FC<FileSyncDrawerProps> = ({ open, onClose, s
   const replaceWorkspace = usePlannerStore((s) => s.replaceWorkspace);
   const showToast = usePlannerStore((s) => s.showToast);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [customFolder, setCustomFolder] = useState('');
 
   if (!open) return null;
 
@@ -127,7 +128,57 @@ export const FileSyncDrawer: React.FC<FileSyncDrawerProps> = ({ open, onClose, s
             </>
           )}
 
-          {status === 'unlinked' && (
+          {status === 'unlinked' && sync.desktopMode && (
+            <>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2 text-slate-700">
+                <p className="font-bold text-slate-900">Choose where to keep your sync file</p>
+                <p>
+                  Pick a folder your cloud app syncs. MVPlanner keeps{' '}
+                  <span className="font-mono">MVPlanner/mvplanner-workspace.json</span> there and saves every change
+                  automatically. Pick the same folder on the website or another Mac to share it.
+                </p>
+              </div>
+              {sync.cloudFolders === null ? (
+                <button type="button" className={`${primary} w-full`} onClick={() => void sync.findCloudFolders()}>
+                  <FolderOpen className="w-3.5 h-3.5" /> Find my cloud folders
+                </button>
+              ) : (
+                <div className="space-y-1.5">
+                  {sync.cloudFolders.map((f) => (
+                    <button
+                      key={f.path}
+                      type="button"
+                      onClick={() => void sync.linkFolder(f.path)}
+                      className="w-full text-left rounded-lg border border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 px-3 py-2 cursor-pointer"
+                    >
+                      <div className="font-semibold text-slate-900">{f.label}</div>
+                      <div className="text-[10.5px] text-slate-500 font-mono truncate">{f.path}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (customFolder.trim()) void sync.linkFolder(customFolder.trim());
+                }}
+              >
+                <input
+                  value={customFolder}
+                  onChange={(e) => setCustomFolder(e.target.value)}
+                  placeholder="Or type a folder, e.g. ~/School"
+                  aria-label="Folder for the sync file"
+                  className="flex-1 min-w-0 rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-[11px]"
+                />
+                <button type="submit" className={secondary}>
+                  Use
+                </button>
+              </form>
+            </>
+          )}
+
+          {status === 'unlinked' && !sync.desktopMode && (
             <>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2 text-slate-700">
                 <p className="font-bold text-slate-900">How it works</p>
@@ -164,10 +215,14 @@ export const FileSyncDrawer: React.FC<FileSyncDrawerProps> = ({ open, onClose, s
               <div className="flex items-center gap-1.5 font-bold">
                 <KeyRound className="w-4 h-4" /> Allow access to {sync.fileName ?? 'your sync file'}
               </div>
-              <p>
-                Your browser asks again after it restarts. Choose <strong>&ldquo;Allow on every visit&rdquo;</strong>{' '}
-                if it&apos;s offered and you won&apos;t be asked next time.
-              </p>
+              {sync.desktopMode ? (
+                <p>MVPlanner needs permission to read and write files on this Mac. You&apos;ll only be asked once.</p>
+              ) : (
+                <p>
+                  Your browser asks again after it restarts. Choose <strong>&ldquo;Allow on every visit&rdquo;</strong>{' '}
+                  if it&apos;s offered and you won&apos;t be asked next time.
+                </p>
+              )}
               <button type="button" className={`${primary} w-full`} onClick={() => void sync.reconnect()}>
                 Reconnect
               </button>
@@ -183,7 +238,9 @@ export const FileSyncDrawer: React.FC<FileSyncDrawerProps> = ({ open, onClose, s
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 )}
                 <div className="min-w-0">
-                  <div className="font-bold text-slate-900 truncate">{sync.fileName}</div>
+                  <div className="font-bold text-slate-900 truncate" title={sync.filePath ?? undefined}>
+                    {sync.filePath ?? sync.fileName}
+                  </div>
                   <div className="text-[11px] text-slate-500">
                     {status === 'saving' ? 'Saving…' : `Last saved ${fmtTime(sync.lastSavedAt)}`}
                   </div>
@@ -197,6 +254,11 @@ export const FileSyncDrawer: React.FC<FileSyncDrawerProps> = ({ open, onClose, s
                 <button type="button" className={secondary} onClick={() => void sync.saveNow()}>
                   Save now
                 </button>
+                {sync.filePath && (
+                  <button type="button" className={secondary} onClick={() => void sync.revealFile()}>
+                    Show in Finder
+                  </button>
+                )}
                 <button type="button" className={secondary} onClick={() => void sync.unlink()}>
                   <Link2Off className="w-3.5 h-3.5" /> Unlink
                 </button>

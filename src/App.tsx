@@ -19,6 +19,7 @@ import { CalendarImportModal } from './components/CalendarImportModal';
 import { SyncStatusChip } from './components/SyncStatusChip';
 import type { SearchHit } from './engine/search';
 import { useLocalFileSync } from './hooks/useLocalFileSync';
+import { useDesktopApp } from './hooks/useDesktopApp';
 import type { PlannerWorkspace } from './types/planner';
 
 export default function App() {
@@ -77,6 +78,7 @@ export default function App() {
     workspace.binders[workspace.activeBinderId] ?? Object.values(workspace.binders)[0];
 
   const schedule = useMemo(() => resolveSchedule(activeBinder), [activeBinder]);
+  const desktopApp = useDesktopApp(activeBinder, schedule);
   const safeWeekIdx = Math.min(Math.max(0, weekIndex), Math.max(0, schedule.weeks.length - 1));
   const currentWeek = schedule.weeks[safeWeekIdx];
 
@@ -283,6 +285,7 @@ export default function App() {
         fileSyncName={fileSync.fileName}
         onOpenFileSync={() => setFileSyncOpen(true)}
         onOpenCalendarImport={() => setCalendarImportOpen(true)}
+        desktopApp={desktopApp}
       />
 
       {/* Full-Screen Desk Stage */}

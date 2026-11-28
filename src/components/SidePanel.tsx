@@ -10,6 +10,7 @@ import {
   Redo2,
   SlidersHorizontal,
   CalendarPlus,
+  Laptop,
   Sparkles,
   Undo2,
   X,
@@ -22,6 +23,7 @@ import type {
 } from '../types/planner';
 import { formatWeekShortLabel, type ResolvedSchedule } from '../engine/cycleEngine';
 import type { FileSyncStatus } from '../hooks/useLocalFileSync';
+import type { DesktopAppControls } from '../hooks/useDesktopApp';
 
 const COVERS: { id: BinderCoverTheme; bg: string; label: string }[] = [
   { id: 'nist-blue', bg: '#1e4b94', label: 'NIST Blue' },
@@ -61,6 +63,7 @@ interface SidePanelProps {
   fileSyncStatus: FileSyncStatus;
   fileSyncName: string | null;
   onOpenFileSync: () => void;
+  desktopApp: DesktopAppControls;
 }
 
 export const SidePanel: React.FC<SidePanelProps> = ({
@@ -93,6 +96,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   fileSyncStatus,
   fileSyncName,
   onOpenFileSync,
+  desktopApp,
 }) => {
   const fileLabel: Record<FileSyncStatus, string> = {
     unsupported: 'Backup file',
@@ -385,6 +389,42 @@ export const SidePanel: React.FC<SidePanelProps> = ({
               <CalendarPlus className="w-3.5 h-3.5 text-slate-600" />
               Import School Calendar (.ics / .csv)
             </button>
+
+            {desktopApp.installState === 'available' && (
+              <button
+                type="button"
+                onClick={() => void desktopApp.install()}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 bg-slate-900 text-white hover:bg-slate-800 font-semibold cursor-pointer"
+              >
+                <Laptop className="w-3.5 h-3.5" />
+                Install as Mac app
+              </button>
+            )}
+
+            {desktopApp.isApp && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 space-y-1.5">
+                <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Mac app</div>
+                <label className="flex items-center justify-between gap-2 cursor-pointer">
+                  <span className="text-slate-800">Next lesson in the menu bar</span>
+                  <input
+                    type="checkbox"
+                    checked={desktopApp.menuBar}
+                    onChange={(e) => void desktopApp.setMenuBar(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-blue-800"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-2 cursor-pointer">
+                  <span className="text-slate-800">Remind me 5 min before lessons</span>
+                  <input
+                    type="checkbox"
+                    checked={desktopApp.reminders}
+                    onChange={(e) => void desktopApp.setReminders(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-blue-800"
+                  />
+                </label>
+                {desktopApp.problem && <p className="text-[10.5px] text-amber-800">{desktopApp.problem}</p>}
+              </div>
+            )}
 
             <button
               type="button"

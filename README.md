@@ -38,6 +38,15 @@ npm run dev     # http://localhost:5173/mvplanner/
 npm run build   # Type-checks and builds static bundle into dist/
 ```
 
+### Mac app (via the Claude desktop app)
+
+The same app is also published as a Claude artifact that can be installed as a Mac app (☰ → **Install as Mac app**, or "Install as app" in the artifact's menu in the Claude desktop app). In the app:
+- **Sync without prompts**: pick your iCloud Drive / OneDrive / Dropbox / Google Drive folder once; MVPlanner reads and writes `MVPlanner/mvplanner-workspace.json` there directly. Choose that same file on the website to share it.
+- **Menu bar**: next lesson ("P3 9.7 SCI · 12:30"); click for today's list.
+- **Reminders**: a notification 5 minutes before each lesson.
+
+Build it with `npm run build:app` (relative asset paths, output in `dist-app/`). The permissions it asks for are listed in the `claude-artifacts-manifest` tag in `index.html`.
+
 ### Deployment
 
 Every push to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes `dist/` to GitHub Pages.
