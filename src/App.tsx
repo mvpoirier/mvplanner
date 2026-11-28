@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, Redo2, Undo2 } from 'lucide-react';
 import { usePlannerStore } from './store/usePlannerStore';
-import { locateToday, resolveSchedule } from './engine/cycleEngine';
+import { locateToday, resolveSchedule, resolveSlot } from './engine/cycleEngine';
 import { todayISO } from './engine/dateUtils';
 import { SidePanel } from './components/SidePanel';
 import { BinderSpread } from './components/BinderSpread';
@@ -102,6 +102,58 @@ export default function App() {
     void flushPersist();
     void fileSyncSaveNow();
   }, [flushPersist, fileSyncSaveNow]);
+
+  // Tab / Shift+Tab while editing: save and open the next / previous lesson (down the day, then the next day)
+  const [pendingEditKey, setPendingEditKey] = useState<string | null>(null);
+  const tabEdit = useCallback(
+    (dir: 1 | -1) => {
+      if (!activeEdit) return;
+      const lessons: { key: string; weekIdx: number }[] = [];
+      const lo = Math.max(0, safeWeekIdx - 2);
+      const hi = Math.min(schedule.weeks.length - 1, safeWeekIdx + 2);
+      for (let w = lo; w <= hi; w++) {
+        for (const day of schedule.weeks[w].days) {
+          if (!day.inBinderRange) continue;
+          for (const period of activeBinder.periods) {
+            if (period.kind !== 'period') continue;
+            const slot = resolveSlot(activeBinder, day, period);
+            if (!slot.course || slot.exceptionKind === 'full') continue;
+            lessons.push({ key: `${day.iso}__${period.id}`, weekIdx: w });
+          }
+        }
+      }
+      const curKey = `${activeEdit.date}__${activeEdit.periodId}`;
+      let i = lessons.findIndex((l) => l.key === curKey);
+      if (i === -1) {
+        // Editing a non-lesson cell: start from the nearest lesson after it
+        i = lessons.findIndex((l) => l.key > curKey) - (dir === 1 ? 1 : 0);
+      }
+      const next = lessons[i + dir];
+      if (!next) return;
+      finishEditingCell();
+      if (next.weekIdx !== safeWeekIdx) setWeekIndex(next.weekIdx);
+      setPendingEditKey(next.key);
+    },
+    [activeEdit, activeBinder, schedule, safeWeekIdx, finishEditingCell, setWeekIndex],
+  );
+  useEffect(() => {
+    if (!pendingEditKey) return;
+    let tries = 0;
+    const open = () => {
+      const el = document.querySelector<HTMLElement>(`[data-cell="${pendingEditKey}"]`);
+      if (!el) {
+        if (tries++ < 20) requestAnimationFrame(open);
+        else setPendingEditKey(null);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      const [date, periodId] = pendingEditKey.split('__');
+      setSelectedCell({ date, periodId });
+      setActiveEdit({ date, periodId, rect: { top: r.top, bottom: r.bottom, left: r.left, width: r.width } });
+      setPendingEditKey(null);
+    };
+    requestAnimationFrame(open);
+  }, [pendingEditKey, setSelectedCell]);
 
   const goToWeek = useCallback(
     (targetIdx: number) => {
@@ -327,10 +379,32 @@ export default function App() {
             onJumpWeek={goToWeek}
             onJumpToday={goToToday}
             todayIso={todayISO()}
+            onTabEdit={tabEdit}
             onStartWizard={() => setWizardOpen(true)}
             onOpenSync={() => setFileSyncOpen(true)}
             searchSlot={<SearchBox binder={activeBinder} schedule={schedule} onPick={openSearchHit} />}
             statusSlot={
+              <span className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="undo-btn"
+                onClick={undo}
+                disabled={!canUndo}
+                aria-label="Undo"
+                title={`Undo (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}Z)`}
+              >
+                <Undo2 className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                className="undo-btn"
+                onClick={redo}
+                disabled={!canRedo}
+                aria-label="Redo"
+                title={`Redo (${navigator.platform.includes('Mac') ? '⌘⇧Z' : 'Ctrl+Y'})`}
+              >
+                <Redo2 className="w-3 h-3" />
+              </button>
               <SyncStatusChip
                 status={fileSync.status}
                 fileName={fileSync.fileName}
@@ -342,6 +416,7 @@ export default function App() {
                   else setFileSyncOpen(true);
                 }}
               />
+              </span>
             }
           />
         )}
@@ -356,6 +431,7 @@ export default function App() {
             onSelectCell={(date, periodId) => setSelectedCell({ date, periodId })}
             onStartEdit={handleStartEdit}
             onStopEdit={finishEditingCell}
+            onTabEdit={tabEdit}
           />
         )}
 

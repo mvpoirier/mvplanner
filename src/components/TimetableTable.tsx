@@ -12,6 +12,10 @@ import {
 import { resolveSlot, type ResolvedWeek } from '../engine/cycleEngine';
 import { todayISO } from '../engine/dateUtils';
 import { toggleReminderSkip, useReminderPrefs } from '../store/reminderPrefs';
+import { continueList, toggleWrap } from '../engine/richText';
+import { editActiveTextarea } from './FloatingEditBar';
+import { RichLine } from './RichText';
+import { UnitTag } from './UnitTag';
 import { usePlannerStore, type SelectedCell } from '../store/usePlannerStore';
 
 function getRowWeight(period: PeriodRow): number {
@@ -35,6 +39,8 @@ interface TimetableTableProps {
     rect: { top: number; bottom: number; left: number; width: number },
   ) => void;
   onStopEdit: () => void;
+  /** Tab / Shift+Tab while editing: save and open the next / previous lesson. */
+  onTabEdit?: (dir: 1 | -1) => void;
 }
 
 export const TimetableTable: React.FC<TimetableTableProps> = ({
@@ -46,6 +52,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
   onSelectCell,
   onStartEdit,
   onStopEdit,
+  onTabEdit,
 }) => {
   const updateCellPlan = usePlannerStore((s) => s.updateCellPlan);
   const inlineRef = useRef<HTMLTextAreaElement>(null);
@@ -228,6 +235,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                       isEditing ? 'editing' : ''
                     }${todayCol(day.iso, period.id)}${reminderSkips.includes(cellKey(day.iso, period.id)) ? ' no-reminder' : ''}`}
                     style={bgStyle}
+                    data-cell={cellKey(day.iso, period.id)}
                     onClick={() => onSelectCell(day.iso, period.id)}
                     onContextMenu={(e) => {
                       if (slot.exceptionKind === 'full' || (!slot.course && period.kind !== 'period' && slot.banners.length === 0)) return;
@@ -281,14 +289,8 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                           >
                             <span>{slot.course.code}</span>
                             <span className="flex items-center gap-1">
-                              {plan?.seq && <span className="seq-pill">{plan.seq}</span>}
-                              {plan?.pinNote && (
-                                <span
-                                  className="text-[9.5px] text-red-700 font-bold"
-                                  title="Linked to NOTES"
-                                >
-                                  →
-                                </span>
+                              {plan?.unit && binder.units?.[plan.unit.id] && (
+                                <UnitTag binder={binder} unit={plan.unit} />
                               )}
                             </span>
                           </div>
@@ -306,9 +308,34 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                               updateCellPlan(day.iso, period.id, { text: e.target.value })
                             }
                             onKeyDown={(e) => {
-                              if (e.key === 'Escape') {
+                              const mod = e.metaKey || e.ctrlKey;
+                              const save = (t: string) => updateCellPlan(day.iso, period.id, { text: t });
+                              if (e.key === 'Escape' || (mod && e.key === 'Enter')) {
                                 e.preventDefault();
                                 onStopEdit();
+                              } else if (e.key === 'Tab') {
+                                e.preventDefault();
+                                onTabEdit?.(e.shiftKey ? -1 : 1);
+                              } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'b') {
+                                e.preventDefault();
+                                editActiveTextarea((v, a, b) => toggleWrap(v, a, b, 'bold'), save);
+                              } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'i') {
+                                e.preventDefault();
+                                editActiveTextarea((v, a, b) => toggleWrap(v, a, b, 'italic'), save);
+                              } else if (mod && e.shiftKey && e.key.toLowerCase() === 'x') {
+                                e.preventDefault();
+                                editActiveTextarea((v, a, b) => toggleWrap(v, a, b, 'strike'), save);
+                              } else if (mod && e.shiftKey && e.key.toLowerCase() === 'h') {
+                                e.preventDefault();
+                                editActiveTextarea((v, a, b) => toggleWrap(v, a, b, 'mark'), save);
+                              } else if (e.key === 'Enter' && !e.shiftKey && !mod) {
+                                const ta = e.currentTarget;
+                                if (ta.selectionStart !== ta.selectionEnd) return;
+                                const res = continueList(ta.value, ta.selectionStart);
+                                if (res) {
+                                  e.preventDefault();
+                                  editActiveTextarea(() => res, save);
+                                }
                               }
                             }}
                             onClick={(e) => e.stopPropagation()}
@@ -329,8 +356,7 @@ export const TimetableTable: React.FC<TimetableTableProps> = ({
                               return (
                                 <div key={i} className="my-0.5">
                                   <span className={cls}>
-                                    {plan?.star && i === 0 ? '★ ' : ''}
-                                    {line}
+                                    <RichLine line={line} prefix={plan?.star && i === 0 ? '★ ' : undefined} />
                                   </span>
                                 </div>
                               );

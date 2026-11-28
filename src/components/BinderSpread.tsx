@@ -38,6 +38,7 @@ interface BinderSpreadProps {
     rect: { top: number; bottom: number; left: number; width: number },
   ) => void;
   onStopEdit: () => void;
+  onTabEdit?: (dir: 1 | -1) => void;
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onJumpWeek: (weekIdx: number) => void;
@@ -64,6 +65,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
   onSelectCell,
   onStartEdit,
   onStopEdit,
+  onTabEdit,
   onPrevWeek,
   onNextWeek,
   onJumpWeek,
@@ -219,6 +221,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
               onSelectCell={onSelectCell}
               onStartEdit={onStartEdit}
               onStopEdit={onStopEdit}
+              onTabEdit={onTabEdit}
             />
           </div>
         </section>
@@ -267,6 +270,7 @@ export const BinderSpread: React.FC<BinderSpreadProps> = ({
                 onSelectCell={onSelectCell}
                 onStartEdit={onStartEdit}
                 onStopEdit={onStopEdit}
+              onTabEdit={onTabEdit}
               />
             </div>
             <WeeklyNotesPanel binder={binder} week={week} />

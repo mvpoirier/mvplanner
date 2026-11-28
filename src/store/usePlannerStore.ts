@@ -345,8 +345,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       dirtyRevision: state.dirtyRevision + 1,
     });
     schedulePersist(nextWs, state.lockPassphrase);
+    const code = binder.courses[courseId]?.code ?? courseId;
     state.showToast(
-      `Bumped ${result.movedCount} ${courseId} lesson${result.movedCount === 1 ? '' : 's'} forward (${scope === 'blank' ? 'stopped at blank' : 'full term'}). Ctrl+Z to undo.`,
+      scope === 'next'
+        ? `Moved to the next ${code} lesson. ⌘Z to undo.`
+        : `Moved ${result.movedCount} ${code} lesson${result.movedCount === 1 ? '' : 's'} along (${scope === 'blank' ? 'up to the next blank lesson' : 'all lessons from here'}). ⌘Z to undo.`,
     );
     return result.movedCount;
   },

@@ -3,6 +3,7 @@
 import type { AcademicYearBinder, PeriodRow } from '../types/planner';
 import { resolveSlot, type ResolvedSchedule } from './cycleEngine';
 import type { ReminderKind } from '../store/reminderPrefs';
+import { plainText } from './richText';
 
 export interface AgendaItem {
   periodId: string;
@@ -75,7 +76,7 @@ export function agendaFor(binder: AcademicYearBinder, schedule: ResolvedSchedule
       startMin: toMin(start),
       endMin: end ? toMin(end) : null,
       title,
-      note: binder.cellPlans[cellKey]?.text?.trim().split('\n')[0] || null,
+      note: plainText(binder.cellPlans[cellKey]?.text ?? '').trim().split('\n')[0] || null,
     });
   });
   return items.sort((a, b) => a.startMin - b.startMin);

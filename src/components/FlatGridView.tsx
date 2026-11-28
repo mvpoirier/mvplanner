@@ -19,6 +19,7 @@ interface FlatGridViewProps {
     rect: { top: number; bottom: number; left: number; width: number },
   ) => void;
   onStopEdit: () => void;
+  onTabEdit?: (dir: 1 | -1) => void;
 }
 
 export const FlatGridView: React.FC<FlatGridViewProps> = ({
@@ -30,6 +31,7 @@ export const FlatGridView: React.FC<FlatGridViewProps> = ({
   onSelectCell,
   onStartEdit,
   onStopEdit,
+  onTabEdit,
 }) => {
   return (
     <section className="paper-sheet rounded-xl shadow-md border border-slate-200 w-full max-w-[1420px] h-[calc(100vh-24px)] max-h-[880px]">
@@ -52,6 +54,7 @@ export const FlatGridView: React.FC<FlatGridViewProps> = ({
             onSelectCell={onSelectCell}
             onStartEdit={onStartEdit}
             onStopEdit={onStopEdit}
+            onTabEdit={onTabEdit}
           />
         </div>
         <WeeklyNotesPanel binder={binder} week={week} />
